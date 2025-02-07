@@ -1,0 +1,12 @@
+[project]
+authors = [
+  { name = "Denrei Keith De Jesus", email = "denreikeith@gmail.com" },
+  { name = "Stephanie Palero", email = "s.palero.526878@umindanao.edu.ph" },
+  { name = "Joshua Roi Nomus", email = "j.nomus.523625@umindanao.edu.ph" },
+]
+name = "MiRAG"
+version = "0.1.0"
+description = "Mind the (Context) Gap: Reducing AI Hallucination by Bridging Long-Context Retrieval and Information Refinement through Mindful RAG"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
