@@ -88,7 +88,7 @@
       # Package a virtual environment as our main application.
       #
       # Enable no optional dependencies for production build.
-      packages.x86_64-linux.default = pythonSet.mkVirtualEnv "mirag-dev-env" workspace.deps.default;
+      # packages.x86_64-linux.default = pythonSet.mkVirtualEnv "mirag-dev-env" workspace.deps.default;
 
       # Make hello runnable with `nix run`
       apps.x86_64-linux = {
@@ -115,6 +115,7 @@
               UV_PYTHON_DOWNLOADS = "never";
               # Force uv to use nixpkgs Python interpreter
               UV_PYTHON = python.interpreter;
+              VIRTUAL_ENV = ".venv";
             }
             // lib.optionalAttrs pkgs.stdenv.isLinux {
               # Python libraries often load native shared objects using dlopen(3).
