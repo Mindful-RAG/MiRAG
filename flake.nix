@@ -158,7 +158,7 @@
                       fileset = lib.fileset.unions [
                         (old.src + "/pyproject.toml")
                         (old.src + "/README.md")
-                        (old.src + "/src/main.py")
+                        (old.src + "/src/MiRAG/main.py")
                       ];
                     };
 
