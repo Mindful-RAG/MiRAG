@@ -1,13 +1,13 @@
-import numpy
 import argparse
 
+from icecream import ic
+
 from utils.gemini import GeminiInference
-from utils.model import hi
 
-
-def simple_numpy_function():
-    arr = numpy.array([1, 2, 3])
-    return numpy.mean(arr)
+# 1. load test data
+# 2. setup models
+# 3. load the data with tqdm, and process
+# 4. save the results to json
 
 
 def main():
@@ -15,13 +15,11 @@ def main():
     parser.add_argument("--model", type=str, help="Model to use")
     args = parser.parse_args()
 
-    result = simple_numpy_function()
+    gemini = GeminiInference(model_name="gemini-2.0-flash")
 
-    GeminiInference(device="cpu", model_name="gemini-1.5-flash").infer("input")
-    hi()
+    ic("Gemini response: ", gemini.infer("hello gemini!"))
     if args.model:
-        print("Using model:", args.model)
-    print("The mean of the array is:", result)
+        ic("Using model:", args.model)
 
 
 if __name__ == "__main__":
