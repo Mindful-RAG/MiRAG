@@ -11,15 +11,9 @@ from utils.gemini import GeminiInference
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, help="Model to use")
-    args = parser.parse_args()
-
     gemini = GeminiInference(model_name="gemini-2.0-flash")
 
-    ic("Gemini response: ", gemini.infer("hello gemini!"))
-    if args.model:
-        ic("Using model:", args.model)
+    ic("Gemini response: ", gemini.content("the quick brown fox, continue this"))
 
 
 if __name__ == "__main__":

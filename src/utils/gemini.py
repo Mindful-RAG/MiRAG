@@ -1,5 +1,6 @@
 import os
 from google import genai
+from google.genai import types
 import warnings
 from dotenv import load_dotenv
 
@@ -14,28 +15,50 @@ class GeminiInference:
 
         Args:
             model_name (str): Name of the Gemini model to use.
-            device (str): The device to run the inference on (e.g., "cpu" or "cuda").
         """
         self.model_name = model_name
-        # Simulate loading the Gemini model.
-        self.model = self._load_model()
-        # if not os.getenv("GENAI_API_KEY", ""):
-        #     warnings.warn(
-        #         "GENAI_API_KEY environment variable is not set. API calls may fail.",
-        #         UserWarning,
-        #     )
-        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY", ""))
+        self.client = genai.Client(
+            api_key=os.getenv("GEMINI_API_KEY", ""),
+        )
 
-    def _load_model(self):
+    def content(self, content):
         """
-        Simulates loading a Gemini model.
+        Generates content using the Gemini model.
+
+        Args:
+            content (str): The content to generate.
 
         Returns:
-            A dummy model object.
+            The generated content as a string.
         """
-        # In a real implementation, this would load the actual Gemini model.
-        print(f"Loading Gemini model '{self.model_name}'")
-        return {}
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=content,
+            config=types.GenerateContentConfig(
+                temperature=0.0,
+                max_output_tokens=1000,
+                response_mime_type="text/plain",
+                safety_settings=[
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                ],
+            ),
+        )
+        return response.text
 
     def infer(self, input_data):
         """
