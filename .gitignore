@@ -162,3 +162,5 @@ cython_debug/
 #.idea/
 
 .direnv
+*.bz2*
+*.tsv*
