@@ -13,10 +13,16 @@ dependencies = [
     "accelerate>=1.3.0",
     "datasets>=3.2.0",
     "google-genai>=1.0.0",
+    "gradcache>=0.0.1",
     "huggingface-hub>=0.28.1",
+    "llama-index>=0.12.19",
+    "llama-index-embeddings-huggingface>=0.5.1",
+    "llama-index-llms-gemini>=0.4.10",
+    "llama-index-tools-tavily-research>=0.3.0",
+    "nest-asyncio>=1.6.0",
     "numpy>=2.2.2",
     "python-dotenv>=1.0.1",
-    "tevatron>=0.1.0",
+    "tevatron",
     "tiktoken>=0.8.0",
     "tqdm>=4.67.1",
     "transformers>=4.48.3",
@@ -29,12 +35,19 @@ lint =  [
 ]
 dev = [
     "icecream>=2.1.4",
+    "peft>=0.14.0",
     "torch>=2.6.0",
 ]
+
+[project.scripts]
+mirag = "MiRAG.main:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+
 [tool.uv.sources]
 wikiextractor = { git = "https://github.com/attardi/wikiextractor.git", rev = "ab8988ebfa9e4557411f3d4c0f4ccda139e18875" }
+gradcache = { git = "https://github.com/luyug/GradCache" }
+tevatron = { path = "../tevatron" }
