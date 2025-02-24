@@ -164,3 +164,8 @@ cython_debug/
 .direnv
 *.bz2*
 *.tsv*
+out_process
+wiki
+text
+model_scifact
+enwiki*
