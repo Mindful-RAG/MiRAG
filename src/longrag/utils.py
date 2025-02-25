@@ -159,9 +159,10 @@ class LongRAGRetriever(BaseRetriever):
             query_embedding=query_embedding, similarity_top_k=500
         )
 
-        # Query for similar vectors.
+        # query for answer
         query_res = self._vec_store.query(vector_store_query)
 
+        # determine top parents of most similar children (these are long retrieval units)
         top_parents_set: Set[str] = set()
         top_parents: List[NodeWithScore] = []
         for id_, similarity in zip(query_res.ids, query_res.similarities):
@@ -173,17 +174,10 @@ class LongRAGRetriever(BaseRetriever):
                 node_with_score = NodeWithScore(node=parent_node, score=similarity)
                 top_parents.append(node_with_score)
 
-                # If we've collected enough unique parents, break early.
-                if len(top_parents) >= self._similarity_top_k:
+                if len(top_parents_set) >= self._similarity_top_k:
                     break
 
-        # Instead of asserting, log a warning if the number of results is fewer than expected.
-        expected_count = min(self._similarity_top_k, len(self._grouped_nodes))
-        if len(top_parents) < expected_count:
-            # You can replace print() with any logging method you'd like.
-            print(
-                f"Warning: expected {expected_count} unique parent nodes but got {len(top_parents)}."
-            )
+        assert len(top_parents) == min(self._similarity_top_k, len(self._grouped_nodes))
 
         return top_parents
 
