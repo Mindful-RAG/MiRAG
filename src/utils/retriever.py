@@ -13,11 +13,11 @@ import tiktoken
 
 def main():
     test_data = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_100")
-    # ic(test_data)
+    ic(test_data)
     # enc = tiktoken.get_encoding("cl100k_base")
-    with open("test_data.json", "w") as f:
-        json.dump(test_data[0], f)
-        # f.write(str(test_data[0]))
+    # with open("test_data.json", "w") as f:
+    #     json.dump(test_data[0], f)
+    # f.write(str(test_data[0]))
     # ic(enc)
     # ic(len(enc.encode(test_data[0]["context"])))
 

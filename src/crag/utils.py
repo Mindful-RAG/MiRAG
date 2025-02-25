@@ -1,3 +1,4 @@
+import os
 from icecream import ic
 from llama_index.core.workflow import Event
 from llama_index.core.schema import NodeWithScore
@@ -9,23 +10,17 @@ from llama_index.core.workflow import (
     StopEvent,
 )
 from llama_index.core import (
+    StorageContext,
     VectorStoreIndex,
     Document,
     PromptTemplate,
     SummaryIndex,
+    load_index_from_storage,
 )
 from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.llms.openai import OpenAI
 from llama_index.tools.tavily_research.base import TavilyToolSpec
 from llama_index.core.base.base_retriever import BaseRetriever
-
-from longrag.utils import (
-    LongRAGRetriever,
-    split_doc,
-    get_grouped_docs,
-    DEFAULT_TOP_K,
-)
-from llama_index.core.schema import QueryBundle
 
 
 class PrepEvent(Event):
@@ -103,6 +98,9 @@ class CorrectiveRAGWorkflow(Workflow):
             return None
 
         index = VectorStoreIndex.from_documents(documents)
+        index.storage_context.persist(persist_dir="./storage")
+        # storage_context = StorageContext.from_defaults(persist_dir="./storage")
+        # index = load_index_from_storage(storage_context)
 
         return StopEvent(result=index)
 
@@ -121,7 +119,7 @@ class CorrectiveRAGWorkflow(Workflow):
         tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
         index = ev.get("index")
 
-        llm = OpenAI(model="gpt-4o-mini")
+        llm = OpenAI(model="o1-mini")
         await ctx.set(
             "relevancy_pipeline",
             QueryPipeline(chain=[DEFAULT_RELEVANCY_PROMPT_TEMPLATE, llm]),
