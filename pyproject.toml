@@ -19,6 +19,7 @@ dependencies = [
     "llama-index-embeddings-huggingface>=0.5.1",
     "llama-index-llms-gemini>=0.4.10",
     "llama-index-tools-tavily-research>=0.3.0",
+    "llama-index-utils-workflow>=0.3.0",
     "nest-asyncio>=1.6.0",
     "numpy>=2.2.2",
     "python-dotenv>=1.0.1",
@@ -26,6 +27,7 @@ dependencies = [
     "tiktoken>=0.8.0",
     "tqdm>=4.67.1",
     "transformers>=4.48.3",
+    "uvloop>=0.21.0",
     "wikiextractor",
 ]
 
@@ -40,7 +42,7 @@ dev = [
 ]
 
 [project.scripts]
-mirag = "MiRAG.main:main"
+mirag = "mirag.main:run"
 
 [build-system]
 requires = ["hatchling"]
