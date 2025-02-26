@@ -1,4 +1,3 @@
-import os
 from icecream import ic
 from llama_index.core.workflow import Event
 from llama_index.core.schema import NodeWithScore
@@ -10,17 +9,19 @@ from llama_index.core.workflow import (
     StopEvent,
 )
 from llama_index.core import (
-    StorageContext,
+    Settings,
     VectorStoreIndex,
     Document,
     PromptTemplate,
     SummaryIndex,
-    load_index_from_storage,
 )
 from llama_index.core.query_pipeline import QueryPipeline
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.openai import OpenAI
 from llama_index.tools.tavily_research.base import TavilyToolSpec
 from llama_index.core.base.base_retriever import BaseRetriever
+
+Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
 
 class PrepEvent(Event):
@@ -98,9 +99,6 @@ class CorrectiveRAGWorkflow(Workflow):
             return None
 
         index = VectorStoreIndex.from_documents(documents)
-        index.storage_context.persist(persist_dir="./storage")
-        # storage_context = StorageContext.from_defaults(persist_dir="./storage")
-        # index = load_index_from_storage(storage_context)
 
         return StopEvent(result=index)
 
@@ -119,7 +117,7 @@ class CorrectiveRAGWorkflow(Workflow):
         tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
         index = ev.get("index")
 
-        llm = OpenAI(model="o1-mini")
+        llm = OpenAI(model="gpt-4o-mini")
         await ctx.set(
             "relevancy_pipeline",
             QueryPipeline(chain=[DEFAULT_RELEVANCY_PROMPT_TEMPLATE, llm]),
@@ -158,8 +156,7 @@ class CorrectiveRAGWorkflow(Workflow):
         result = retriever.retrieve(query_str)
         await ctx.set("retrieved_nodes", result)
         await ctx.set("query_str", query_str)
-
-    #     return RetrieveEvent(retrieved_nodes=result)
+        return RetrieveEvent(retrieved_nodes=result)
 
     @step
     async def eval_relevance(
@@ -175,9 +172,7 @@ class CorrectiveRAGWorkflow(Workflow):
             relevancy = relevancy_pipeline.run(
                 context_str=node.text, query_str=query_str
             )
-            result = relevancy.message.content.lower().strip()
             relevancy_results.append(relevancy.message.content.lower().strip())
-            ic(f"Document: {node.text[:30]}... Relevant? {result}")
 
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
