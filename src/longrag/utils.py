@@ -1,4 +1,4 @@
-from typing import Dict, FrozenSet, Iterable, List, Optional, Set
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set
 
 from datasets import load_dataset
 from icecream import ic
@@ -6,6 +6,7 @@ from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.readers import StringIterableReader
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
 from llama_index.core.settings import Settings
@@ -206,48 +207,37 @@ class LongRAGWorkflow(Workflow):
         Returns:
             StopEvent | None: stop event with result
         """
-        data_dir: str = ev.get("data_dir")
+        data_dir: str | List[str] = ev.get("data_dir")
         llm: LLM = ev.get("llm")
         chunk_size: int | None = ev.get("chunk_size")
         similarity_top_k: int = ev.get("similarity_top_k")
         small_chunk_size: int = ev.get("small_chunk_size")
         index: VectorStoreIndex | None = ev.get("index")
-        index_kwargs: dict[str, t.Any] | None = ev.get("index_kwargs")
-        dataset = ev.get("dataset")
+        index_kwargs: dict[str, Any] | None = ev.get("index_kwargs")
 
-        if not (data_dir or dataset) or any(
-            i is None for i in [llm, similarity_top_k, small_chunk_size]
-        ):
+        if any(i is None for i in [data_dir, llm, similarity_top_k, small_chunk_size]):
             return None
 
         if not index:
-            if dataset is not None:
-                # Build documents from dataset records.
-                docs = []
-                for record in dataset:
-                    node = TextNode(
-                        text=record["context"],
-                        id_=str(record["query_id"]),
-                        metadata={
-                            "query": record["query"],
-                            "answer": record["answer"],
-                            "context_titles": record["context_titles"],
-                        },
-                    )
-                    docs.append(node)
-            else:
-                docs = SimpleDirectoryReader(data_dir).load_data()
-
+            docs = StringIterableReader().load_data(texts=data_dir)
+            # docs = SimpleDirectoryReader(data_dir).load_data()
             if chunk_size is not None:
-                nodes = split_doc(chunk_size, docs)
-                grouped_nodes = get_grouped_docs(nodes)
+                nodes = split_doc(
+                    chunk_size, docs
+                )  # split documents into chunks of chunk_size
+                grouped_nodes = get_grouped_docs(
+                    nodes
+                )  # get list of nodes after grouping (groups are combined into one node), these are long retrieval units
             else:
                 grouped_nodes = docs
 
+            # split large retrieval units into smaller nodes
             small_nodes = split_doc(small_chunk_size, grouped_nodes)
+
             index_kwargs = index_kwargs or {}
             index = VectorStoreIndex(small_nodes, **index_kwargs)
         else:
+            # get smaller nodes from index and form large retrieval units from these nodes
             small_nodes = index.docstore.docs.values()
             grouped_nodes = get_grouped_docs(small_nodes, None)
 
