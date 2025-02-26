@@ -1,5 +1,5 @@
 from icecream import ic
-from typing import Dict, FrozenSet, Iterable, List, Optional, Set, Any
+from typing import Dict, FrozenSet, Iterable, List, Literal, Optional, Set, Any
 
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.vector_stores.types import (
@@ -35,6 +35,8 @@ from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.readers import StringIterableReader
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
+
+from mirag.metrics import single_ans_em
 
 
 # constants
@@ -205,6 +207,22 @@ DEFAULT_TRANSFORM_QUERY_TEMPLATE = PromptTemplate(
     Respond with the optimized query only:"""
 )
 
+EXTRACT_ANSWER = PromptTemplate(
+    template="""Your task is to extract the answer from the given context and question. \n
+    Context:
+    \n ------- \n
+    {context}
+    \n ------- \n
+    Question:
+    \n ------- \n
+    {question}
+    \n ------- \n
+    Your task is to derive a very concise short answer, extracting a substring from the given long answer.
+    Respond with the answer only.
+    It's important to ensure that the output short answer remains as simple as possible.
+    Short answer is typically an entity without any other redundant words."""
+)
+
 
 class MindfulRAGWorkflow(Workflow):
     """Mindful RAG Workflow"""
@@ -366,7 +384,7 @@ class MindfulRAGWorkflow(Workflow):
             )
             relevancy_results.append(relevancy.message.content.lower().strip())
 
-        ic("eval_relevance step")
+        ic("eval_relevance step", relevancy_results)
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
@@ -385,7 +403,7 @@ class MindfulRAGWorkflow(Workflow):
         ]
 
         result = "\n".join(relevant_texts)
-        ic("extract_relevant_texts step")
+        ic("extract_relevant_texts step", result)
         return TextExtractEvent(relevant_text=result)
 
     @step
@@ -408,12 +426,13 @@ class MindfulRAGWorkflow(Workflow):
         else:
             search_text = ""
 
-        ic("transform_query_pipeline step")
+        ic("transform_query_pipeline step", relevancy_results)
         return QueryEvent(relevant_text=relevant_text, search_text=search_text)
 
     @step
-    async def query_result(self, ctx: Context, ev: QueryEvent) -> StopEvent:
+    async def metrics(self, ctx: Context, ev: QueryEvent) -> StopEvent:
         """Get result with relevant text."""
+        llm = await ctx.get("llm")
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
@@ -422,8 +441,17 @@ class MindfulRAGWorkflow(Workflow):
         index = SummaryIndex.from_documents(documents)
         query_engine = index.as_query_engine()
         result = query_engine.query(query_str)
-        ic("query_result step")
-        return StopEvent(result=result)
+        ic(result)
+
+        qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
+        short_answer = qp.run(context=str(result), question=query_str)
+
+        return StopEvent(
+            result={
+                "long_answer": str(result),
+                "short_answer": short_answer.message.content.lower().strip(),
+            }
+        )
 
 
 class LongRAGRetriever(BaseRetriever):

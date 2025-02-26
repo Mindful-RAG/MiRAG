@@ -6,7 +6,9 @@ from llama_index.llms.openai import OpenAI
 # import nest_asyncio
 from dotenv import load_dotenv
 from icecream import ic
+from tqdm.asyncio import tqdm
 
+from mirag.metrics import has_correct_answer, single_ans_em
 from utils.logger import logger
 
 from mirag.workflows import (
@@ -48,20 +50,48 @@ async def main():
 
     logger.info("running query")
 
+    substring_match, exact_match, retrieval = 0, 0, 0
+    tt = 0
+    context_sizes = []
+
+    output_file = open("mirag_output.json", "w")
+
     results = {}
-    for query_str in dataset["query"]:
+    for item in tqdm(dataset, desc="Querying"):
+        query, answers = item["query"], item["answer"]
+        context_titles, context = item["context_titles"], item["context"]
         res = await wf.run(
-            query_str=query_str,
+            query_str=query,
             index=index["index"],
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
         )
-        results[query_str] = str(res)
 
-    logger.info("saving results")
-    with open("mirag_output.txt", "w") as f:
-        f.write(json.dumps(results))
+        is_exact_match = single_ans_em(res["short_answer"], answers)
+        is_substring_match = has_correct_answer(res["long_answer"], answers)
+        # assuming its nq
 
-    # logger.info("iello")
+        # TODO: add appropriate query including crag (correct|ambiguous|incorrect)
+        output = {
+            "id": item["query_id"],
+            "query": query,
+            "answer": answers,
+            "long_answer": res["long_answer"],
+            "short_answer": res["short_answer"],
+            "is_exact_match": is_exact_match,
+            "is_substring_match": is_substring_match,
+        }
+
+        tt += 1
+        exact_match += is_exact_match
+        substring_match += is_substring_match
+        if tt % 10 == 0:
+            logger.info(f"Substring match: {substring_match / tt}")
+            logger.info(f"Exact match: {exact_match / tt}")
+        json_string = json.dumps(output)
+        output_file.write(f"{json_string},\n")
+
+    logger.info(f"Retrieval accuracy: {retrieval / len(dataset)}")
+    logger.info(f"Exact Match: {exact_match / len(dataset)}")
 
 
 def run():
