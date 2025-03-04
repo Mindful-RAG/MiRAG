@@ -436,6 +436,15 @@ class MindfulRAGWorkflow(Workflow):
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
+        relevancy_results = await ctx.get("relevancy_results")
+
+        # Determine the status of the RAG process based on the relevancy results
+        if all(result == "yes" for result in relevancy_results):
+            status = "correct"
+        elif not relevant_text and search_text:
+            status = "incorrect"
+        else:
+            status = "ambiguous"
 
         documents = [Document(text=relevant_text + "\n" + search_text)]
         index = SummaryIndex.from_documents(documents)
@@ -450,6 +459,7 @@ class MindfulRAGWorkflow(Workflow):
             result={
                 "long_answer": str(result),
                 "short_answer": short_answer.message.content.lower().strip(),
+                "status": status
             }
         )
 

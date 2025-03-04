@@ -35,7 +35,8 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100[:5]",
+        # split="subset_100[:5]",
+        split="subset_100",
         trust_remote_code=True,
     )
 
@@ -50,9 +51,11 @@ async def main():
 
     logger.info("running query")
 
-    substring_match, exact_match, retrieval = 0, 0, 0
+    substring_match, exact_match = 0, 0
+    correct, ambiguous, incorrect = 0, 0, 0
     tt = 0
     context_sizes = []
+    dataset_size = len(dataset)
 
     output_file = open("mirag_output.json", "w")
 
@@ -79,7 +82,15 @@ async def main():
             "short_answer": res["short_answer"],
             "is_exact_match": is_exact_match,
             "is_substring_match": is_substring_match,
+            "status": res["status"] # correct|ambiguous|incorrect
         }
+
+        if output["status"] == "correct":
+            correct += 1
+        elif output["status"] == "ambiguous":
+            ambiguous += 1
+        elif output["status"] == "incorrect":
+            incorrect += 1
 
         tt += 1
         exact_match += is_exact_match
@@ -90,9 +101,19 @@ async def main():
         json_string = json.dumps(output)
         output_file.write(f"{json_string},\n")
 
-    logger.info(f"Retrieval accuracy: {retrieval / len(dataset)}")
-    logger.info(f"Exact Match: {exact_match / len(dataset)}")
+    logger.info(f"Exact Match: {exact_match / dataset_size}")
+    logger.info(f"Correct Match: {correct / dataset_size}")
+    logger.info(f"Ambiguous Match: {ambiguous / dataset_size}")
+    logger.info(f"Incorrect Match: {incorrect / dataset_size}")
 
+    with open("mirag_summary.json","w") as f:
+        f.write(json.dumps({
+            "dataset_size": dataset_size,
+            "exact_match": exact_match / dataset_size,
+            "correct_match": correct / dataset_size,
+            "ambiguous_match": ambiguous / dataset_size,
+            "incorrect_match": incorrect / dataset_size
+        }))
 
 def run():
     import uvloop
