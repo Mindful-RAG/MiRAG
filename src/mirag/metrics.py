@@ -53,48 +53,6 @@ def lower(text):
     return text.lower()
 
 
-# def normalize_answer(text: str) -> str:
-#     """
-#     Normalize answer text for more robust matching.
-
-#     This function:
-#     1. Converts to lowercase
-#     2. Removes articles (a, an, the)
-#     3. Removes punctuation
-#     4. Removes excessive whitespace
-#     5. Strips common prefixes like "the answer is"
-
-#     Args:
-#         text: The text to normalize
-
-#     Returns:
-#         str: Normalized text
-#     """
-#     import re
-#     import string
-
-#     text = _normalize(text)
-
-#     # Convert to lowercase
-#     text = text.lower()
-
-#     # Remove common prefixes that don't affect the answer's meaning
-#     prefixes = ["the answer is ", "answer: ", "answer is ", "it is ", "it's ", "this is "]
-#     for prefix in prefixes:
-#         if text.startswith(prefix):
-#             text = text[len(prefix):]
-
-#     # Remove articles
-#     text = re.sub(r'\b(a|an|the)\b', ' ', text)
-
-#     # Remove punctuation
-#     text = text.translate(str.maketrans('', '', string.punctuation))
-
-#     # Remove excessive whitespace and trim
-#     text = re.sub(r'\s+', ' ', text).strip()
-
-#     return text
-
 def normalize_answer(s):
     return white_space_fix(remove_articles(remove_punc(lower(_normalize(s)))))
 
@@ -109,35 +67,6 @@ def single_ans_em(pred, gold):
     if type(gold) is not list:
         gold = [gold]
     return max(compute_exact(pred, a) for a in gold)
-
-# def single_ans_em(predicted_answer: str, ground_truth_answers) -> float:
-#     """
-#     Calculate exact match score for natural question answering.
-
-#     This metric checks if the predicted answer exactly matches any of the ground truth answers
-#     after normalization (removing articles, punctuation, etc.)
-
-#     Args:
-#         predicted_answer: The model's predicted answer as a string
-#         ground_truth_answers: List of acceptable ground truth answers
-
-#     Returns:
-#         float: 1.0 if there's an exact match after normalization, 0.0 otherwise
-#     """
-#     if type(ground_truth_answers) is not list:
-#         ground_truth_answers = [ground_truth_answers]
-#     if not predicted_answer or not ground_truth_answers:
-#         return 0.0
-
-#     # Normalize the predicted answer
-#     norm_pred = normalize_answer(predicted_answer)
-
-#     # Check if normalized prediction matches any normalized ground truth
-#     for gt_answer in ground_truth_answers:
-#         if normalize_answer(gt_answer) == norm_pred:
-#             return 1.0
-
-#     return 0.0
 
 
 def has_correct_answer(retrieve_doc, answers):
