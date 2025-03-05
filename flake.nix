@@ -108,23 +108,41 @@
           packages = [
             python
             pkgs.uv
+            pkgs.rocmPackages.rocm-runtime # ROCm runtime
+            pkgs.rocmPackages.rocm-smi # ROCm system management interface
+            pkgs.rocmPackages.rocminfo
+            pkgs.gcc
+            pkgs.cmake
           ];
-          env =
-            {
-              # Prevent uv from managing Python downloads
-              UV_PYTHON_DOWNLOADS = "never";
-              # Force uv to use nixpkgs Python interpreter
-              UV_PYTHON = python.interpreter;
-              VIRTUAL_ENV = ".venv";
-            }
-            // lib.optionalAttrs pkgs.stdenv.isLinux {
-              # Python libraries often load native shared objects using dlopen(3).
-              # Setting LD_LIBRARY_PATH makes the dynamic library loader aware of libraries without using RPATH for lookup.
-              LD_LIBRARY_PATH = lib.makeLibraryPath pkgs.pythonManylinuxPackages.manylinux1;
-            };
+          env = {
+            # Prevent uv from managing Python downloads
+            # UV_PYTHON_DOWNLOADS = "never";
+            # Force uv to use nixpkgs Python interpreter
+            # UV_PYTHON = python.interpreter;
+            VIRTUAL_ENV = ".venv";
+            PYTORCH_ROCM_ARCH = "gfx1030";
+            HSA_OVERRIDE_GFX_VERSION = "10.3.0";
+            HIP_VISIBLE_DEVICES = 0;
+            LD_LIBRARY_PATH = lib.makeLibraryPath [
+              pkgs.stdenv.cc.cc
+              pkgs.zstd
+            ];
+          };
+          # // lib.optionalAttrs pkgs.stdenv.isLinux {
+          #   # Python libraries often load native shared objects using dlopen(3).
+          #   # Setting LD_LIBRARY_PATH makes the dynamic library loader aware of libraries without using RPATH for lookup.
+          #   LD_LIBRARY_PATH = lib.makeLibraryPath [
+          #     pkgs.pythonManylinuxPackages.manylinux1
+          #     pkgs.zstd
+          #     pkgs.stdenv.cc.cc
+          #   ];
+          # };
           shellHook = ''
             # $SHELL
-            unset PYTHONPATH
+            # unset PYTHONPATH
+            #
+            uv sync --all-extras
+            source .venv/bin/activate
           '';
         };
 
