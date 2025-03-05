@@ -1,4 +1,5 @@
 import os
+import time
 import json
 import tiktoken
 from datasets import load_dataset
@@ -38,8 +39,8 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100[:5]",
-        # split="subset_1000[:200]",
+        # split="subset_100[:5]",
+        split="subset_1000",
         trust_remote_code=True,
     )
 
@@ -71,8 +72,6 @@ async def main():
         res = await wf.run(
             query_str=query,
             index=index["index"],
-            context=context,
-            context_titles=context_titles,
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
         )
 
@@ -135,8 +134,10 @@ def run():
     import uvloop
 
     logger.info("Starting main execution.")
+    start = time.time()
     uvloop.run(main())
-    logger.info("MiRAG execution finished.")
+    runtime = time.time() - start
+    logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
 
 
 if __name__ == "__main__":

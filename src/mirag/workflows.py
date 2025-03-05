@@ -1,3 +1,4 @@
+from re import L
 from dotenv.main import load_dotenv
 from icecream import ic
 from typing import Dict, FrozenSet, Iterable, List, Literal, Optional, Set, Any
@@ -26,6 +27,7 @@ from llama_index.core import (
     SummaryIndex,
 )
 
+from utils.logger import logger
 from llama_index.core.llms import LLM
 from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -50,13 +52,13 @@ DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
 Settings.embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-small-en-v1.5",
-    embed_batch_size=128,
+    model_name="BAAI/bge-large-en-v1.5",
+    embed_batch_size=64,
     cache_folder="./.embeddings",
     device="cuda",
 )
 # Settings.llm = Gemini(model="models/gemini-1.5-flash")
-Settings.llm = OpenAI(model="gpt-4o-mini")
+Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0, max_tokens=1000)
 
 
 class PrepEvent(Event):
@@ -379,6 +381,10 @@ class MindfulRAGWorkflow(Workflow):
         # ic("in retrieve step", index)
         retriever: BaseRetriever = index.as_retriever(**retriever_kwargs)
         result = retriever.retrieve(query_str)
+
+        logger.info(f"LongRAG retrieved {len(result)} documents")
+        logger.info(f"LongRAG retrieval scores: {[node.score for node in result]}")
+
         await ctx.set("retrieved_nodes", result)
         await ctx.set("query_str", query_str)
         return RetrieveEvent(retrieved_nodes=result)
@@ -400,6 +406,12 @@ class MindfulRAGWorkflow(Workflow):
             relevancy_results.append(relevancy.message.content.lower().strip())
 
         # c("eval_relevance step", relevancy_results)
+
+        relevancy_count = sum(1 for r in relevancy_results if r == "yes")
+        logger.info(
+            f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant"
+        )
+
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
@@ -432,6 +444,9 @@ class MindfulRAGWorkflow(Workflow):
 
         # If any document is found irrelevant, transform the query string for better search results.
         if "no" in relevancy_results:
+            logger.info(
+                "LongRAG context insufficient - transforming query and using external search"
+            )
             qp = await ctx.get("transform_query_pipeline")
             transformed_query_str = qp.run(query_str=query_str).message.content
             # Conduct a search with the transformed query string and collect the results.
@@ -439,6 +454,7 @@ class MindfulRAGWorkflow(Workflow):
             search_results = tavily_tool.search(transformed_query_str, max_results=5)
             search_text = "\n".join([result.text for result in search_results])
         else:
+            logger.info("LongRAG context fully relevant - no external search needed")
             search_text = ""
 
         # ic("transform_query_pipeline step", relevancy_results)
@@ -465,6 +481,7 @@ class MindfulRAGWorkflow(Workflow):
         index = SummaryIndex.from_documents(documents)
         query_engine = index.as_query_engine()
         result = query_engine.query(query_str)
+        long_answer = str(result)
         # ic(result)
 
         qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
@@ -472,7 +489,7 @@ class MindfulRAGWorkflow(Workflow):
 
         return StopEvent(
             result={
-                "long_answer": str(result),
+                "long_answer": long_answer,
                 "short_answer": short_answer.message.content.lower().strip(),
                 "status": status,
             }
@@ -504,7 +521,7 @@ class LongRAGRetriever(BaseRetriever):
 
         self._similarity_top_k = similarity_top_k
         self._vec_store = vector_store
-        self._embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+        self._embed_model = Settings.embed_model
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
         """Retrieves.
