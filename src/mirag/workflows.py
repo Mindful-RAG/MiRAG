@@ -1,3 +1,4 @@
+from dotenv.main import load_dotenv
 from icecream import ic
 from typing import Dict, FrozenSet, Iterable, List, Literal, Optional, Set, Any
 
@@ -28,7 +29,9 @@ from llama_index.core import (
 from llama_index.core.llms import LLM
 from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
 from llama_index.llms.openai import OpenAI
+from llama_index.llms.gemini import Gemini
 from llama_index.tools.tavily_research.base import TavilyToolSpec
 from llama_index.core.base.base_retriever import BaseRetriever
 
@@ -38,13 +41,22 @@ from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNo
 
 from mirag.metrics import single_ans_em
 
+load_dotenv()
+
 
 # constants
 DEFAULT_CHUNK_SIZE = 4096  # optionally splits documents into CHUNK_SIZE, then regroups them to demonstrate grouping algorithm
 DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="BAAI/bge-small-en-v1.5",
+    embed_batch_size=128,
+    cache_folder="./.embeddings",
+    device="cuda",
+)
+# Settings.llm = Gemini(model="models/gemini-1.5-flash")
+Settings.llm = OpenAI(model="gpt-4o-mini")
 
 
 class PrepEvent(Event):
@@ -219,6 +231,7 @@ EXTRACT_ANSWER = PromptTemplate(
     \n ------- \n
     Your task is to derive a very concise short answer, extracting a substring from the given long answer.
     Respond with the answer only.
+    If the answer has multiple parts, provide a single, coherent answer.
     It's important to ensure that the output short answer remains as simple as possible.
     Short answer is typically an entity without any other redundant words."""
 )
@@ -270,7 +283,7 @@ class MindfulRAGWorkflow(Workflow):
             small_nodes = index.docstore.docs.values()
             grouped_nodes = get_grouped_docs(small_nodes, None)
 
-        ic("ingest step")
+        # ic("ingest step")
         return LoadNodeEvent(
             small_nodes=small_nodes,
             grouped_nodes=grouped_nodes,
@@ -300,7 +313,7 @@ class MindfulRAGWorkflow(Workflow):
         )
         query_eng = RetrieverQueryEngine.from_args(retriever, ev.llm)
 
-        ic("make query engine step")
+        # ic("make query engine step")
         return StopEvent(
             result={
                 "retriever": retriever,
@@ -325,6 +338,7 @@ class MindfulRAGWorkflow(Workflow):
         index = ev.get("index")
 
         llm = OpenAI(model="gpt-4o-mini")
+        # llm = Gemini(model="models/gemini-1.5-flash")
 
         await ctx.set(
             "relevancy_pipeline",
@@ -334,6 +348,7 @@ class MindfulRAGWorkflow(Workflow):
             "transform_query_pipeline",
             QueryPipeline(chain=[DEFAULT_TRANSFORM_QUERY_TEMPLATE, llm]),
         )
+        # ic(llm)
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
@@ -342,7 +357,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("query_str", query_str)
         await ctx.set("retriever_kwargs", retriever_kwargs)
 
-        ic("prepare step")
+        # ic("prepare step")
         return PrepEvent()
 
     @step
@@ -361,7 +376,7 @@ class MindfulRAGWorkflow(Workflow):
                 "Index and tavily tool must be constructed. Run with 'documents' and 'tavily_ai_apikey' params first."
             )
 
-        ic("in retrieve step", index)
+        # ic("in retrieve step", index)
         retriever: BaseRetriever = index.as_retriever(**retriever_kwargs)
         result = retriever.retrieve(query_str)
         await ctx.set("retrieved_nodes", result)
@@ -384,7 +399,7 @@ class MindfulRAGWorkflow(Workflow):
             )
             relevancy_results.append(relevancy.message.content.lower().strip())
 
-        ic("eval_relevance step", relevancy_results)
+        # c("eval_relevance step", relevancy_results)
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
@@ -403,7 +418,7 @@ class MindfulRAGWorkflow(Workflow):
         ]
 
         result = "\n".join(relevant_texts)
-        ic("extract_relevant_texts step", result)
+        # ic("extract_relevant_texts step", result)
         return TextExtractEvent(relevant_text=result)
 
     @step
@@ -426,7 +441,7 @@ class MindfulRAGWorkflow(Workflow):
         else:
             search_text = ""
 
-        ic("transform_query_pipeline step", relevancy_results)
+        # ic("transform_query_pipeline step", relevancy_results)
         return QueryEvent(relevant_text=relevant_text, search_text=search_text)
 
     @step
@@ -450,7 +465,7 @@ class MindfulRAGWorkflow(Workflow):
         index = SummaryIndex.from_documents(documents)
         query_engine = index.as_query_engine()
         result = query_engine.query(query_str)
-        ic(result)
+        # ic(result)
 
         qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
         short_answer = qp.run(context=str(result), question=query_str)
@@ -459,7 +474,7 @@ class MindfulRAGWorkflow(Workflow):
             result={
                 "long_answer": str(result),
                 "short_answer": short_answer.message.content.lower().strip(),
-                "status": status
+                "status": status,
             }
         )
 
