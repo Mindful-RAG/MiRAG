@@ -1,7 +1,9 @@
 import os
 import json
+import tiktoken
 from datasets import load_dataset
 from llama_index.llms.openai import OpenAI
+from llama_index.llms.gemini import Gemini
 
 # import nest_asyncio
 from dotenv import load_dotenv
@@ -32,11 +34,12 @@ async def main():
 
     logger.info("loading dataset")
     llm = OpenAI(model="gpt-4o-mini")
+    # llm = Gemini(model="models/gemini-1.5-flash")
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        # split="subset_100[:5]",
-        split="subset_100",
+        split="subset_100[:5]",
+        # split="subset_1000[:200]",
         trust_remote_code=True,
     )
 
@@ -55,17 +58,21 @@ async def main():
     correct, ambiguous, incorrect = 0, 0, 0
     tt = 0
     context_sizes = []
+    enc = tiktoken.get_encoding("cl100k_base")
     dataset_size = len(dataset)
 
     output_file = open("mirag_output.json", "w")
 
-    results = {}
     for item in tqdm(dataset, desc="Querying"):
         query, answers = item["query"], item["answer"]
         context_titles, context = item["context_titles"], item["context"]
+        context_size = len(enc.encode(context))
+        context_sizes.append(context_size)
         res = await wf.run(
             query_str=query,
             index=index["index"],
+            context=context,
+            context_titles=context_titles,
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
         )
 
@@ -82,7 +89,7 @@ async def main():
             "short_answer": res["short_answer"],
             "is_exact_match": is_exact_match,
             "is_substring_match": is_substring_match,
-            "status": res["status"] # correct|ambiguous|incorrect
+            "status": res["status"],  # correct|ambiguous|incorrect
         }
 
         if output["status"] == "correct":
@@ -101,19 +108,28 @@ async def main():
         json_string = json.dumps(output)
         output_file.write(f"{json_string},\n")
 
+    logger.info(f"Context size: {sum(context_sizes) / len(context_sizes)}")
     logger.info(f"Exact Match: {exact_match / dataset_size}")
+    logger.info(f"Substring Match: {substring_match / dataset_size}")
     logger.info(f"Correct Match: {correct / dataset_size}")
     logger.info(f"Ambiguous Match: {ambiguous / dataset_size}")
     logger.info(f"Incorrect Match: {incorrect / dataset_size}")
 
-    with open("mirag_summary.json","w") as f:
-        f.write(json.dumps({
-            "dataset_size": dataset_size,
-            "exact_match": exact_match / dataset_size,
-            "correct_match": correct / dataset_size,
-            "ambiguous_match": ambiguous / dataset_size,
-            "incorrect_match": incorrect / dataset_size
-        }))
+    with open("mirag_summary.json", "w") as f:
+        f.write(
+            json.dumps(
+                {
+                    "dataset_size": dataset_size,
+                    "context_size": sum(context_sizes) / len(context_sizes),
+                    "exact_match": exact_match / dataset_size,
+                    "substring_match": substring_match / dataset_size,
+                    "correct_match": correct,
+                    "ambiguous_match": ambiguous,
+                    "incorrect_match": incorrect,
+                }
+            )
+        )
+
 
 def run():
     import uvloop
