@@ -68,6 +68,23 @@ def parse_arguments():
         action="store_true",
         help="Process only the error entries in the output file",
     )
+    parser.add_argument(
+        "--persist-index",
+        action="store_true",
+        help="Persist the index to disk",
+    )
+    parser.add_argument(
+        "--persist-path",
+        type=str,
+        default="./persisted_index",
+        help="Path to persist the index",
+    )
+    parser.add_argument(
+        "--load-index",
+        action="store_true",
+        help="Load index from disk instead of creating a new one",
+    )
+
     return parser.parse_args()
 
 
@@ -294,7 +311,7 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100[:5]",
+        split="subset_1000",
         # split="subset_1000[:5]",
         trust_remote_code=True,
     )
@@ -308,13 +325,63 @@ async def main():
 
     logger.info("loading index")
 
-    index = await wf.run(
-        dataset=combined_texts,
-        llm=llm,
-        chunk_size=DEFAULT_CHUNK_SIZE,
-        similarity_top_k=DEFAULT_TOP_K,
-        small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
-    )
+    index = None
+
+    # Try to load index from disk if requested
+    if args.load_index and os.path.exists(args.persist_path):
+        logger.info(f"Loading index from {args.persist_path}")
+        try:
+            from llama_index.core import load_index_from_storage
+            from llama_index.core.storage import StorageContext
+
+            # Load the index from disk
+            storage_context = StorageContext.from_defaults(
+                persist_dir=args.persist_path
+            )
+            loaded_index = load_index_from_storage(storage_context)
+
+            # Run a minimal workflow step to get the index in the right format
+            # We just need to convert the loaded index into the format expected by the workflow
+            index = await wf.run(
+                dataset=[],  # Empty dataset since we're loading the index
+                llm=llm,
+                index=loaded_index,  # Pass the loaded index
+                chunk_size=DEFAULT_CHUNK_SIZE,
+                similarity_top_k=DEFAULT_TOP_K,
+                small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
+            )
+            logger.info("Successfully loaded index from disk")
+
+        except Exception as e:
+            logger.error(f"Error loading index: {str(e)}")
+            logger.error(traceback.format_exc())
+            logger.info("Will create a new index instead")
+            index = None
+
+    # Create index if it wasn't loaded
+    if index is None:
+        logger.info("Creating new index")
+        index = await wf.run(
+            dataset=combined_texts,
+            llm=llm,
+            chunk_size=DEFAULT_CHUNK_SIZE,
+            similarity_top_k=DEFAULT_TOP_K,
+            small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
+        )
+
+        # Persist the index if requested
+        if args.persist_index:
+            logger.info(f"Persisting index to {args.persist_path}")
+            # Create directory if it doesn't exist
+            os.makedirs(args.persist_path, exist_ok=True)
+
+            try:
+                # Save the index to disk
+                index["index"].storage_context.persist(persist_dir=args.persist_path)
+                logger.info("Successfully persisted index to disk")
+            except Exception as e:
+                logger.error(f"Error persisting index: {str(e)}")
+                logger.error(traceback.format_exc())
 
     # Check if we're continuing from a previous file
     if args.continue_from_file or args.process_errors_only:
@@ -322,6 +389,21 @@ async def main():
             args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY")
         )
         return
+
+    # index = await wf.run(
+    #     dataset=combined_texts,
+    #     llm=llm,
+    #     chunk_size=DEFAULT_CHUNK_SIZE,
+    #     similarity_top_k=DEFAULT_TOP_K,
+    #     small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
+    # )
+
+    # # Check if we're continuing from a previous file
+    # if args.continue_from_file or args.process_errors_only:
+    #     await continue_from_previous_file(
+    #         args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY")
+    #     )
+    #     return
 
     logger.info("running query")
 
