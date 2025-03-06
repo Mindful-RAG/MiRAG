@@ -1,6 +1,9 @@
 import os
+import argparse
 import time
 import json
+from llama_index.core import Settings
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 import tiktoken
 from datasets import load_dataset
 from llama_index.llms.openai import OpenAI
@@ -29,18 +32,55 @@ load_dotenv()
 # nest_asyncio.apply()
 
 
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="MiRAG: Mindful RAG Workflow")
+
+    parser.add_argument(
+        "--llm", type=str, default="gpt-4o-mini", help="LLM model to use"
+    )
+    parser.add_argument(
+        "--embed_model",
+        type=str,
+        default="BAAI/bge-large-en-v1.5",
+        help="embeddings model to use",
+    )
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default="mirag_output.json",
+        help="Output of the workflow",
+    )
+
+    return parser.parse_args()
+
+
 async def main():
+    args = parse_arguments()
+
+    Settings.embed_model = HuggingFaceEmbedding(
+        model_name=args.embed_model,
+        embed_batch_size=64,
+        cache_folder="./.embeddings",
+        device="cuda",
+    )
+
+    # Configure LLM based on argument
+    if "gpt" in args.llm:
+        llm = OpenAI(model=args.llm, temperature=0)
+        Settings.llm = llm
+    elif "gemini" in args.llm:
+        llm = Gemini(model=f"models/{args.llm}")
+        Settings.llm = llm
+
     wf = MindfulRAGWorkflow(timeout=60)
     # draw_all_possible_flows(wf, "mirag_workflow.html")
 
     logger.info("loading dataset")
-    llm = OpenAI(model="gpt-4o-mini")
-    # llm = Gemini(model="models/gemini-1.5-flash")
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
         # split="subset_100[:5]",
-        split="subset_1000",
+        split="subset_1000[:5]",
         trust_remote_code=True,
     )
 
@@ -62,7 +102,7 @@ async def main():
     enc = tiktoken.get_encoding("cl100k_base")
     dataset_size = len(dataset)
 
-    output_file = open("mirag_output.json", "w")
+    output_file = open(args.output_file, "w")
 
     for item in tqdm(dataset, desc="Querying"):
         query, answers = item["query"], item["answer"]
@@ -71,6 +111,7 @@ async def main():
         context_sizes.append(context_size)
         res = await wf.run(
             query_str=query,
+            llm=llm,
             index=index["index"],
             tavily_api_key=os.getenv("TAVILY_API_KEY"),
         )
@@ -114,7 +155,7 @@ async def main():
     logger.info(f"Ambiguous Match: {ambiguous / dataset_size}")
     logger.info(f"Incorrect Match: {incorrect / dataset_size}")
 
-    with open("mirag_summary.json", "w") as f:
+    with open(f"summary_{args.output_file}", "w") as f:
         f.write(
             json.dumps(
                 {

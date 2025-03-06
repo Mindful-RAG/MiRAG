@@ -51,14 +51,14 @@ DEFAULT_CHUNK_SIZE = 4096  # optionally splits documents into CHUNK_SIZE, then r
 DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
-Settings.embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-large-en-v1.5",
-    embed_batch_size=64,
-    cache_folder="./.embeddings",
-    device="cuda",
-)
-# Settings.llm = Gemini(model="models/gemini-1.5-flash")
-Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0, max_tokens=1000)
+# Settings.embed_model = HuggingFaceEmbedding(
+#     model_name="BAAI/bge-large-en-v1.5",
+#     embed_batch_size=64,
+#     cache_folder="./.embeddings",
+#     device="cuda",
+# )
+# # Settings.llm = Gemini(model="models/gemini-1.5-flash")
+# Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0)
 
 
 class PrepEvent(Event):
@@ -332,6 +332,7 @@ class MindfulRAGWorkflow(Workflow):
 
         query_str: str | None = ev.get("query_str")
         retriever_kwargs: dict | None = ev.get("retriever_kwargs", {})
+        llm: LLM = ev.get("llm")
 
         if query_str is None:
             return None
@@ -339,7 +340,6 @@ class MindfulRAGWorkflow(Workflow):
         tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
         index = ev.get("index")
 
-        llm = OpenAI(model="gpt-4o-mini")
         # llm = Gemini(model="models/gemini-1.5-flash")
 
         await ctx.set(
@@ -451,7 +451,7 @@ class MindfulRAGWorkflow(Workflow):
             transformed_query_str = qp.run(query_str=query_str).message.content
             # Conduct a search with the transformed query string and collect the results.
             tavily_tool = await ctx.get("tavily_tool")
-            search_results = tavily_tool.search(transformed_query_str, max_results=5)
+            search_results = tavily_tool.search(transformed_query_str, max_results=3)
             search_text = "\n".join([result.text for result in search_results])
         else:
             logger.info("LongRAG context fully relevant - no external search needed")
