@@ -32,6 +32,7 @@ dependencies = [
     "pytorch-triton-rocm",
     "chromadb>=0.6.3",
     "llama-index-vector-stores-chroma>=0.4.1",
+    "loguru>=0.7.3",
 ]
 
 [dependency-groups]

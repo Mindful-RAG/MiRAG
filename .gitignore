@@ -169,3 +169,5 @@ wiki
 text
 model_scifact
 enwiki*
+.embeddings
+index*
