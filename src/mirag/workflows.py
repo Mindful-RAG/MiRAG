@@ -1,5 +1,6 @@
 from re import L
-from dotenv.main import load_dotenv
+from datasets import load_dataset
+from dotenv import load_dotenv
 from icecream import ic
 from typing import Dict, FrozenSet, Iterable, List, Literal, Optional, Set, Any
 
@@ -27,7 +28,14 @@ from llama_index.core import (
     SummaryIndex,
 )
 
-from utils.logger import logger
+from mirag.longrag_retriever import LongRAGRetriever
+from mirag.prompts import (
+    PREDICT_LONG_ANSWER,
+    DEFAULT_RELEVANCY_PROMPT_TEMPLATE,
+    DEFAULT_TRANSFORM_QUERY_TEMPLATE,
+    EXTRACT_ANSWER,
+)
+from loguru import logger
 from llama_index.core.llms import LLM
 from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -40,25 +48,10 @@ from llama_index.core.base.base_retriever import BaseRetriever
 from llama_index.core.readers import StringIterableReader
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
+from mirag.constants import DEFAULT_MAX_GROUP_SIZE
 
-from mirag.metrics import single_ans_em
 
 load_dotenv()
-
-
-# constants
-DEFAULT_CHUNK_SIZE = 4096  # optionally splits documents into CHUNK_SIZE, then regroups them to demonstrate grouping algorithm
-DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
-DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
-DEFAULT_TOP_K = 8  # top k for retrieving
-# Settings.embed_model = HuggingFaceEmbedding(
-#     model_name="BAAI/bge-large-en-v1.5",
-#     embed_batch_size=64,
-#     cache_folder="./.embeddings",
-#     device="cuda",
-# )
-# # Settings.llm = Gemini(model="models/gemini-1.5-flash")
-# Settings.llm = OpenAI(model="gpt-4o-mini", temperature=0)
 
 
 class PrepEvent(Event):
@@ -188,57 +181,6 @@ def get_grouped_docs(
     return ret_nodes
 
 
-DEFAULT_RELEVANCY_PROMPT_TEMPLATE = PromptTemplate(
-    template="""As a grader, your task is to evaluate the relevance of a document retrieved in response to a user's question.
-
-    Retrieved Document:
-    -------------------
-    {context_str}
-
-    User Question:
-    --------------
-    {query_str}
-
-    Evaluation Criteria:
-    - Consider whether the document contains keywords or topics related to the user's question.
-    - The evaluation should not be overly stringent; the primary objective is to identify and filter out clearly irrelevant retrievals.
-
-    Decision:
-    - Assign a binary score to indicate the document's relevance.
-    - Use 'yes' if the document is relevant to the question, or 'no' if it is not.
-
-    Please provide your binary score ('yes' or 'no') below to indicate the document's relevance to the user question."""
-)
-
-DEFAULT_TRANSFORM_QUERY_TEMPLATE = PromptTemplate(
-    template="""Your task is to refine a query to ensure it is highly effective for retrieving relevant search results. \n
-    Analyze the given input to grasp the core semantic intent or meaning. \n
-    Original Query:
-    \n ------- \n
-    {query_str}
-    \n ------- \n
-    Your goal is to rephrase or enhance this query to improve its search performance. Ensure the revised query is concise and directly aligned with the intended search objective. \n
-    Respond with the optimized query only:"""
-)
-
-EXTRACT_ANSWER = PromptTemplate(
-    template="""Your task is to extract the answer from the given context and question. \n
-    Context:
-    \n ------- \n
-    {context}
-    \n ------- \n
-    Question:
-    \n ------- \n
-    {question}
-    \n ------- \n
-    Your task is to derive a very concise short answer, extracting a substring from the given long answer.
-    Respond with the answer only.
-    If the answer has multiple parts, provide a single, coherent answer.
-    It's important to ensure that the output short answer remains as simple as possible.
-    Short answer is typically an entity without any other redundant words."""
-)
-
-
 class MindfulRAGWorkflow(Workflow):
     """Mindful RAG Workflow"""
 
@@ -331,6 +273,7 @@ class MindfulRAGWorkflow(Workflow):
         """Prepare for retrieval."""
 
         query_str: str | None = ev.get("query_str")
+        context_titles: str | None = ev.get("context_titles")
         retriever_kwargs: dict | None = ev.get("retriever_kwargs", {})
         llm: LLM = ev.get("llm")
 
@@ -357,6 +300,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("tavily_tool", TavilyToolSpec(api_key=tavily_ai_apikey))
 
         await ctx.set("query_str", query_str)
+        await ctx.set("context_titles", context_titles)
         await ctx.set("retriever_kwargs", retriever_kwargs)
 
         # ic("prepare step")
@@ -382,8 +326,8 @@ class MindfulRAGWorkflow(Workflow):
         retriever: BaseRetriever = index.as_retriever(**retriever_kwargs)
         result = retriever.retrieve(query_str)
 
-        logger.info(f"LongRAG retrieved {len(result)} documents")
-        logger.info(f"LongRAG retrieval scores: {[node.score for node in result]}")
+        logger.debug(f"LongRAG retrieved {len(result)} documents")
+        logger.debug(f"LongRAG retrieval scores: {[node.score for node in result]}")
 
         await ctx.set("retrieved_nodes", result)
         await ctx.set("query_str", query_str)
@@ -408,7 +352,7 @@ class MindfulRAGWorkflow(Workflow):
         # c("eval_relevance step", relevancy_results)
 
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
-        logger.info(
+        logger.debug(
             f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant"
         )
 
@@ -444,7 +388,7 @@ class MindfulRAGWorkflow(Workflow):
 
         # If any document is found irrelevant, transform the query string for better search results.
         if "no" in relevancy_results:
-            logger.info(
+            logger.debug(
                 "LongRAG context insufficient - transforming query and using external search"
             )
             qp = await ctx.get("transform_query_pipeline")
@@ -454,7 +398,7 @@ class MindfulRAGWorkflow(Workflow):
             search_results = tavily_tool.search(transformed_query_str, max_results=3)
             search_text = "\n".join([result.text for result in search_results])
         else:
-            logger.info("LongRAG context fully relevant - no external search needed")
+            logger.debug("LongRAG context fully relevant - no external search needed")
             search_text = ""
 
         # ic("transform_query_pipeline step", relevancy_results)
@@ -467,6 +411,7 @@ class MindfulRAGWorkflow(Workflow):
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
+        context_titles = await ctx.get("context_titles")
         relevancy_results = await ctx.get("relevancy_results")
 
         # Determine the status of the RAG process based on the relevancy results
@@ -477,15 +422,27 @@ class MindfulRAGWorkflow(Workflow):
         else:
             status = "ambiguous"
 
-        documents = [Document(text=relevant_text + "\n" + search_text)]
-        index = SummaryIndex.from_documents(documents)
-        query_engine = index.as_query_engine()
-        result = query_engine.query(query_str)
-        long_answer = str(result)
+        long_answer_qp = QueryPipeline(chain=[PREDICT_LONG_ANSWER, llm])
+        long_answer_query = long_answer_qp.run(
+            titles=context_titles,
+            context=f"{relevant_text} \n {search_text}",
+            question=query_str,
+        )
+        long_answer = long_answer_query.message.content.lower().strip()
+        # documents = [Document(text=relevant_text + "\n" + search_text)]
+        # logger.debug(documents)
+        # index = SummaryIndex.from_documents(documents)
+        # query_engine = index.as_query_engine()
+        # result = query_engine.query(query_str)
+        # long_answer = str(result)
         # ic(result)
 
         qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
-        short_answer = qp.run(context=str(result), question=query_str)
+        short_answer = qp.run(
+            examples=self.generate_demo_examples(num_demo=8),
+            question=query_str,
+            long_answer=str(long_answer),
+        )
 
         return StopEvent(
             result={
@@ -495,67 +452,15 @@ class MindfulRAGWorkflow(Workflow):
             }
         )
 
-
-class LongRAGRetriever(BaseRetriever):
-    """Long RAG Retriever."""
-
-    def __init__(
-        self,
-        grouped_nodes: List[TextNode],
-        small_toks: List[TextNode],
-        vector_store: BasePydanticVectorStore,
-        similarity_top_k: int = DEFAULT_TOP_K,
-    ) -> None:
-        """Constructor.
-
-        Args:
-            grouped_nodes (List[TextNode]): Long retrieval units, nodes with docs grouped together based on relationships
-            small_toks (List[TextNode]): Smaller tokens
-            embed_model (BaseEmbedding, optional): Embed model. Defaults to None.
-            similarity_top_k (int, optional): Similarity top k. Defaults to 8.
+    def generate_demo_examples(self, num_demo=8):
         """
-        self._grouped_nodes = grouped_nodes
-        self._grouped_nodes_dict = {node.id_: node for node in grouped_nodes}
-        self._small_toks = small_toks
-        self._small_toks_dict = {node.id_: node for node in self._small_toks}
-
-        self._similarity_top_k = similarity_top_k
-        self._vec_store = vector_store
-        self._embed_model = Settings.embed_model
-
-    def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        """Retrieves.
-
-        Args:
-            query_bundle (QueryBundle): query bundle
-
-        Returns:
-            List[NodeWithScore]: nodes with scores
+        Generate in-context examples to extract the short answer from the long answer.
         """
-        # make query
-        query_embedding = self._embed_model.get_query_embedding(query_bundle.query_str)
-        vector_store_query = VectorStoreQuery(
-            query_embedding=query_embedding, similarity_top_k=500
-        )
-
-        # query for answer
-        query_res = self._vec_store.query(vector_store_query)
-
-        # determine top parents of most similar children (these are long retrieval units)
-        top_parents_set: Set[str] = set()
-        top_parents: List[NodeWithScore] = []
-        for id_, similarity in zip(query_res.ids, query_res.similarities):
-            cur_node = self._small_toks_dict[id_]
-            parent_id = cur_node.ref_doc_id
-            if parent_id not in top_parents_set:
-                top_parents_set.add(parent_id)
-                parent_node = self._grouped_nodes_dict[parent_id]
-                node_with_score = NodeWithScore(node=parent_node, score=similarity)
-                top_parents.append(node_with_score)
-
-                if len(top_parents_set) >= self._similarity_top_k:
-                    break
-
-        assert len(top_parents) == min(self._similarity_top_k, len(self._grouped_nodes))
-
-        return top_parents
+        if num_demo == 0:
+            return ""
+        demo_data = load_dataset("TIGER-Lab/LongRAG", "answer_extract_example")["train"]
+        demo_prompt = "Here are some examples: "
+        for item in demo_data.select(range(num_demo)):
+            for answer in item["answers"]:
+                demo_prompt += f"Question: {item['question']}\nLong Answer: {item['long_answer']}\nShort Answer: {answer}\n\n"
+        return demo_prompt
