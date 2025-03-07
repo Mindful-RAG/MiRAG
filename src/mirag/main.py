@@ -16,13 +16,13 @@ from icecream import ic
 from tqdm.asyncio import tqdm
 
 from mirag.metrics import has_correct_answer, single_ans_em
-from utils.logger import logger
+from loguru import logger
 
-from mirag.workflows import (
+from mirag.workflows import MindfulRAGWorkflow
+from mirag.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_SMALL_CHUNK_SIZE,
     DEFAULT_TOP_K,
-    MindfulRAGWorkflow,
 )
 from llama_index.utils.workflow import (
     draw_all_possible_flows,
@@ -97,6 +97,7 @@ async def process_item(wf, item, index, llm, tavily_api_key):
 
     res = await wf.run(
         query_str=query,
+        context_titles=context_titles,
         llm=llm,
         index=index["index"],
         tavily_api_key=tavily_api_key,
@@ -311,7 +312,7 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_1000",
+        split="subset_100[:1]",
         # split="subset_1000[:5]",
         trust_remote_code=True,
     )
