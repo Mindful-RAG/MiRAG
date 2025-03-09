@@ -48,9 +48,7 @@ class LongRAGRetriever(BaseRetriever):
         """
         # make query
         query_embedding = self._embed_model.get_query_embedding(query_bundle.query_str)
-        vector_store_query = VectorStoreQuery(
-            query_embedding=query_embedding, similarity_top_k=500
-        )
+        vector_store_query = VectorStoreQuery(query_embedding=query_embedding, similarity_top_k=500)
 
         # query for answer
         query_res = self._vec_store.query(vector_store_query)

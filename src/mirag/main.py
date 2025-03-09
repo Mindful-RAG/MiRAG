@@ -36,9 +36,7 @@ load_dotenv()
 def parse_arguments():
     parser = argparse.ArgumentParser(description="MiRAG: Mindful RAG Workflow")
 
-    parser.add_argument(
-        "--llm", type=str, default="gpt-4o-mini", help="LLM model to use"
-    )
+    parser.add_argument("--llm", type=str, default="gpt-4o-mini", help="LLM model to use")
     parser.add_argument(
         "--embed_model",
         type=str,
@@ -188,9 +186,7 @@ async def continue_from_previous_file(args, dataset, wf, index, llm, tavily_api_
             continue
 
         try:
-            output, context_size = await process_item(
-                wf, dataset_item, index, llm, tavily_api_key
-            )
+            output, context_size = await process_item(wf, dataset_item, index, llm, tavily_api_key)
             context_sizes.append(context_size)
 
             if output["status"] == "correct":
@@ -272,15 +268,11 @@ def update_summary_file(output_file, results):
                     "processed_items": processed,
                     "error_items": errors,
                     "exact_match": exact_match / processed if processed > 0 else 0,
-                    "substring_match": substring_match / processed
-                    if processed > 0
-                    else 0,
+                    "substring_match": substring_match / processed if processed > 0 else 0,
                     "correct_match": correct / processed if processed > 0 else 0,
                     "ambiguous_match": ambiguous / processed if processed > 0 else 0,
                     "incorrect_match": incorrect / processed if processed > 0 else 0,
-                    "failed_item_ids": [
-                        r["id"] for r in results if r.get("status") == "error"
-                    ],
+                    "failed_item_ids": [r["id"] for r in results if r.get("status") == "error"],
                     "completion_percentage": processed / len(results) * 100,
                 }
             )
@@ -336,9 +328,7 @@ async def main():
             from llama_index.core.storage import StorageContext
 
             # Load the index from disk
-            storage_context = StorageContext.from_defaults(
-                persist_dir=args.persist_path
-            )
+            storage_context = StorageContext.from_defaults(persist_dir=args.persist_path)
             loaded_index = load_index_from_storage(storage_context)
 
             # Run a minimal workflow step to get the index in the right format
@@ -386,9 +376,7 @@ async def main():
 
     # Check if we're continuing from a previous file
     if args.continue_from_file or args.process_errors_only:
-        await continue_from_previous_file(
-            args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY")
-        )
+        await continue_from_previous_file(args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY"))
         return
 
     # index = await wf.run(
@@ -422,9 +410,7 @@ async def main():
 
     for i, item in enumerate(tqdm(dataset, desc="Querying")):
         try:
-            output, context_size = await process_item(
-                wf, item, index, llm, tavily_api_key
-            )
+            output, context_size = await process_item(wf, item, index, llm, tavily_api_key)
 
             context_sizes.append(context_size)
 
@@ -483,9 +469,7 @@ async def main():
 
             for item in tqdm(items_to_retry, desc=f"Retry #{retry_count}"):
                 try:
-                    output, context_size = await process_item(
-                        wf, item, index, llm, tavily_api_key
-                    )
+                    output, context_size = await process_item(wf, item, index, llm, tavily_api_key)
                     context_sizes.append(context_size)
 
                     if output["status"] == "correct":
@@ -501,10 +485,7 @@ async def main():
 
                     # Find and replace the error entry with successful result
                     for i, res in enumerate(results):
-                        if (
-                            res.get("id") == item["query_id"]
-                            and res.get("status") == "error"
-                        ):
+                        if res.get("id") == item["query_id"] and res.get("status") == "error":
                             results[i] = output
                             break
 
@@ -548,24 +529,12 @@ async def main():
                 {
                     "dataset_size": dataset_size,
                     "processed_items": tt,
-                    "context_size": sum(context_sizes) / len(context_sizes)
-                    if context_sizes
-                    else None,
-                    "exact_match": exact_match / successful_items
-                    if successful_items > 0
-                    else 0,
-                    "substring_match": substring_match / successful_items
-                    if successful_items > 0
-                    else 0,
-                    "correct_match": correct / successful_items
-                    if successful_items > 0
-                    else 0,
-                    "ambiguous_match": ambiguous / successful_items
-                    if successful_items > 0
-                    else 0,
-                    "incorrect_match": incorrect / successful_items
-                    if successful_items > 0
-                    else 0,
+                    "context_size": sum(context_sizes) / len(context_sizes) if context_sizes else None,
+                    "exact_match": exact_match / successful_items if successful_items > 0 else 0,
+                    "substring_match": substring_match / successful_items if successful_items > 0 else 0,
+                    "correct_match": correct / successful_items if successful_items > 0 else 0,
+                    "ambiguous_match": ambiguous / successful_items if successful_items > 0 else 0,
+                    "incorrect_match": incorrect / successful_items if successful_items > 0 else 0,
                     "failed_items": [item["query_id"] for item in failed_items],
                     "retried_successfully": retried_items,
                     "completion_percentage": (tt / dataset_size) * 100,

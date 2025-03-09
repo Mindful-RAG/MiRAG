@@ -1,7 +1,6 @@
 from llama_index.core import PromptTemplate
 
 
-
 DEFAULT_RELEVANCY_PROMPT_TEMPLATE = PromptTemplate(
     template="""As a grader, your task is to evaluate the relevance of a document retrieved in response to a user's question.
 

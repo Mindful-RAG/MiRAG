@@ -1,98 +1,36 @@
-from re import L
+from typing import Any, Dict, FrozenSet, List, Optional, Set
+
 from datasets import load_dataset
 from dotenv import load_dotenv
-from icecream import ic
-from typing import Dict, FrozenSet, Iterable, List, Literal, Optional, Set, Any
-
-from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.vector_stores.types import (
-    BasePydanticVectorStore,
-    VectorStoreQuery,
-)
+from llama_index.core import VectorStoreIndex
+from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
-from typing import Iterable
-from llama_index.core.workflow import Event
-from llama_index.core.schema import NodeWithScore, TextNode
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.query_pipeline import QueryPipeline
+from llama_index.core.readers import StringIterableReader
+from llama_index.core.retrievers import BaseRetriever
+from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.workflow import (
-    Workflow,
-    step,
     Context,
     StartEvent,
     StopEvent,
+    Workflow,
+    step,
 )
-from llama_index.core import (
-    Settings,
-    VectorStoreIndex,
-    Document,
-    PromptTemplate,
-    SummaryIndex,
-)
+from llama_index.tools.tavily_research.base import TavilyToolSpec
+from loguru import logger
 
+from mirag.constants import DEFAULT_MAX_GROUP_SIZE
+from mirag.events import LoadNodeEvent, PrepEvent, QueryEvent, RelevanceEvalEvent, RetrieveEvent, TextExtractEvent
 from mirag.longrag_retriever import LongRAGRetriever
 from mirag.prompts import (
-    PREDICT_LONG_ANSWER,
     DEFAULT_RELEVANCY_PROMPT_TEMPLATE,
     DEFAULT_TRANSFORM_QUERY_TEMPLATE,
     EXTRACT_ANSWER,
+    PREDICT_LONG_ANSWER,
 )
-from loguru import logger
-from llama_index.core.llms import LLM
-from llama_index.core.query_pipeline import QueryPipeline
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
-from llama_index.llms.openai import OpenAI
-from llama_index.llms.gemini import Gemini
-from llama_index.tools.tavily_research.base import TavilyToolSpec
-from llama_index.core.base.base_retriever import BaseRetriever
-
-from llama_index.core.readers import StringIterableReader
-from llama_index.core.retrievers import BaseRetriever
-from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
-from mirag.constants import DEFAULT_MAX_GROUP_SIZE
-
 
 load_dotenv()
-
-
-class PrepEvent(Event):
-    """Prep event (prepares for retrieval)."""
-
-    pass
-
-
-class RetrieveEvent(Event):
-    """Retrieve event (gets retrieved nodes)."""
-
-    retrieved_nodes: list[NodeWithScore]
-
-
-class RelevanceEvalEvent(Event):
-    """Relevance evaluation event (gets results of relevance evaluation)."""
-
-    relevant_results: list[str]
-
-
-class TextExtractEvent(Event):
-    """Text extract event. Extracts relevant text and concatenates."""
-
-    relevant_text: str
-
-
-class QueryEvent(Event):
-    """Query event. Queries given relevant text and search text."""
-
-    relevant_text: str
-    search_text: str
-
-
-class LoadNodeEvent(Event):
-    """Event for loading nodes."""
-
-    small_nodes: Iterable[TextNode]
-    grouped_nodes: list[TextNode]
-    index: VectorStoreIndex
-    similarity_top_k: int
-    llm: LLM
 
 
 def split_doc(chunk_size: int, documents: List[BaseNode]) -> List[TextNode]:
@@ -160,9 +98,7 @@ def get_grouped_docs(
     # node IDs
     nodes_str = [node.id_ for node in nodes]
     # maps node ID -> related node IDs based on that node's relationships
-    adj: Dict[str, List[str]] = {
-        node.id_: [val.node_id for val in node.relationships.values()] for node in nodes
-    }
+    adj: Dict[str, List[str]] = {node.id_: [val.node_id for val in node.relationships.values()] for node in nodes}
     # node ID -> node
     nodes_dict = {node.id_: node for node in nodes}
 
@@ -208,9 +144,7 @@ class MindfulRAGWorkflow(Workflow):
         if not index:
             docs = StringIterableReader().load_data(texts=dataset)
             if chunk_size is not None:
-                nodes = split_doc(
-                    chunk_size, docs
-                )  # split documents into chunks of chunk_size
+                nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
                     nodes
                 )  # get list of nodes after grouping (groups are combined into one node), these are long retrieval units
@@ -267,9 +201,7 @@ class MindfulRAGWorkflow(Workflow):
         )
 
     @step
-    async def prepare_for_retrieval(
-        self, ctx: Context, ev: StartEvent
-    ) -> PrepEvent | None:
+    async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
         """Prepare for retrieval."""
 
         query_str: str | None = ev.get("query_str")
@@ -334,9 +266,7 @@ class MindfulRAGWorkflow(Workflow):
         return RetrieveEvent(retrieved_nodes=result)
 
     @step
-    async def eval_relevance(
-        self, ctx: Context, ev: RetrieveEvent
-    ) -> RelevanceEvalEvent:
+    async def eval_relevance(self, ctx: Context, ev: RetrieveEvent) -> RelevanceEvalEvent:
         """Evaluate relevancy of retrieved documents with the query."""
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
@@ -344,43 +274,31 @@ class MindfulRAGWorkflow(Workflow):
         relevancy_results = []
         for node in retrieved_nodes:
             relevancy_pipeline = await ctx.get("relevancy_pipeline")
-            relevancy = relevancy_pipeline.run(
-                context_str=node.text, query_str=query_str
-            )
+            relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
             relevancy_results.append(relevancy.message.content.lower().strip())
 
         # c("eval_relevance step", relevancy_results)
 
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
-        logger.debug(
-            f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant"
-        )
+        logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
 
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
     @step
-    async def extract_relevant_texts(
-        self, ctx: Context, ev: RelevanceEvalEvent
-    ) -> TextExtractEvent:
+    async def extract_relevant_texts(self, ctx: Context, ev: RelevanceEvalEvent) -> TextExtractEvent:
         """Extract relevant texts from retrieved documents."""
         retrieved_nodes = await ctx.get("retrieved_nodes")
         relevancy_results = ev.relevant_results
 
-        relevant_texts = [
-            retrieved_nodes[i].text
-            for i, result in enumerate(relevancy_results)
-            if result == "yes"
-        ]
+        relevant_texts = [retrieved_nodes[i].text for i, result in enumerate(relevancy_results) if result == "yes"]
 
         result = "\n".join(relevant_texts)
         # ic("extract_relevant_texts step", result)
         return TextExtractEvent(relevant_text=result)
 
     @step
-    async def transform_query_pipeline(
-        self, ctx: Context, ev: TextExtractEvent
-    ) -> QueryEvent:
+    async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
         """Search the transformed query with Tavily API."""
         relevant_text = ev.relevant_text
         relevancy_results = await ctx.get("relevancy_results")
@@ -388,9 +306,7 @@ class MindfulRAGWorkflow(Workflow):
 
         # If any document is found irrelevant, transform the query string for better search results.
         if "no" in relevancy_results:
-            logger.debug(
-                "LongRAG context insufficient - transforming query and using external search"
-            )
+            logger.debug("LongRAG context insufficient - transforming query and using external search")
             qp = await ctx.get("transform_query_pipeline")
             transformed_query_str = qp.run(query_str=query_str).message.content
             # Conduct a search with the transformed query string and collect the results.
@@ -462,5 +378,7 @@ class MindfulRAGWorkflow(Workflow):
         demo_prompt = "Here are some examples: "
         for item in demo_data.select(range(num_demo)):
             for answer in item["answers"]:
-                demo_prompt += f"Question: {item['question']}\nLong Answer: {item['long_answer']}\nShort Answer: {answer}\n\n"
+                demo_prompt += (
+                    f"Question: {item['question']}\nLong Answer: {item['long_answer']}\nShort Answer: {answer}\n\n"
+                )
         return demo_prompt

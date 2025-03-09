@@ -42,6 +42,7 @@ lint =  [
 dev = [
     "icecream>=2.1.4",
     "peft>=0.14.0",
+    "pre-commit>=4.1.0",
 ]
 
 [project.scripts]
@@ -67,3 +68,8 @@ pytorch-triton-rocm = [
 name = "pytorch-rocm"
 url = "https://download.pytorch.org/whl/rocm6.2"
 explicit = true
+
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

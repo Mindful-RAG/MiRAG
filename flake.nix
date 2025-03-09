@@ -2,7 +2,10 @@
   description = "MiRAG flake using uv2nix";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    # pinning versions https://www.nixhub.io/
+    # uv 0.6.3
+    # python 3.12.8
+    nixpkgs.url = "github:NixOS/nixpkgs/3a05eebede89661660945da1f151959900903b6a";
 
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
