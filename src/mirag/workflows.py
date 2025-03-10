@@ -1,6 +1,5 @@
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
-from datasets import load_dataset
 from dotenv import load_dotenv
 from llama_index.core import VectorStoreIndex
 from llama_index.core.llms import LLM
@@ -350,24 +349,21 @@ class MindfulRAGWorkflow(Workflow):
         else:
             status = "ambiguous"
 
+        # Prepend "web search" if search_text is present
+        context_with_attribution = relevant_text
+        if search_text:
+            context_with_attribution = f"[Web Search]: {search_text}\n" + context_with_attribution
+
         long_answer_qp = QueryPipeline(chain=[PREDICT_LONG_ANSWER, llm])
         long_answer_query = long_answer_qp.run(
             titles=context_titles,
-            context=f"{relevant_text} \n {search_text}",
+            context=context_with_attribution,
             question=query_str,
         )
         long_answer = long_answer_query.message.content.lower().strip()
-        # documents = [Document(text=relevant_text + "\n" + search_text)]
-        # logger.debug(documents)
-        # index = SummaryIndex.from_documents(documents)
-        # query_engine = index.as_query_engine()
-        # result = query_engine.query(query_str)
-        # long_answer = str(result)
-        # ic(result)
 
         qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
         short_answer = qp.run(
-            examples=self.generate_demo_examples(num_demo=8),
             question=query_str,
             long_answer=str(long_answer),
         )
@@ -379,18 +375,3 @@ class MindfulRAGWorkflow(Workflow):
                 "status": status,
             }
         )
-
-    def generate_demo_examples(self, num_demo=8):
-        """
-        Generate in-context examples to extract the short answer from the long answer.
-        """
-        if num_demo == 0:
-            return ""
-        demo_data = load_dataset("TIGER-Lab/LongRAG", "answer_extract_example")["train"]
-        demo_prompt = "Here are some examples: "
-        for item in demo_data.select(range(num_demo)):
-            for answer in item["answers"]:
-                demo_prompt += (
-                    f"Question: {item['question']}\nLong Answer: {item['long_answer']}\nShort Answer: {answer}\n\n"
-                )
-        return demo_prompt
