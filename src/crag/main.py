@@ -15,16 +15,12 @@ from llama_index.utils.workflow import (
 
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def main():
-    hf_dataset = load_dataset(
-        "TIGER-Lab/LongRAG", "nq", split="subset_100[:5]", trust_remote_code=True
-    )
+    hf_dataset = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_100[:5]", trust_remote_code=True)
 
     documents = StringIterableReader().load_data(texts=hf_dataset["context"])
     # documents = SimpleDirectoryReader("./data").load_data()

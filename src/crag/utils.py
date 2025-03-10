@@ -103,9 +103,7 @@ class CorrectiveRAGWorkflow(Workflow):
         return StopEvent(result=index)
 
     @step
-    async def prepare_for_retrieval(
-        self, ctx: Context, ev: StartEvent
-    ) -> PrepEvent | None:
+    async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
         """Prepare for retrieval."""
 
         query_str: str | None = ev.get("query_str")
@@ -159,9 +157,7 @@ class CorrectiveRAGWorkflow(Workflow):
         return RetrieveEvent(retrieved_nodes=result)
 
     @step
-    async def eval_relevance(
-        self, ctx: Context, ev: RetrieveEvent
-    ) -> RelevanceEvalEvent:
+    async def eval_relevance(self, ctx: Context, ev: RetrieveEvent) -> RelevanceEvalEvent:
         """Evaluate relevancy of retrieved documents with the query."""
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
@@ -169,35 +165,25 @@ class CorrectiveRAGWorkflow(Workflow):
         relevancy_results = []
         for node in retrieved_nodes:
             relevancy_pipeline = await ctx.get("relevancy_pipeline")
-            relevancy = relevancy_pipeline.run(
-                context_str=node.text, query_str=query_str
-            )
+            relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
             relevancy_results.append(relevancy.message.content.lower().strip())
 
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
     @step
-    async def extract_relevant_texts(
-        self, ctx: Context, ev: RelevanceEvalEvent
-    ) -> TextExtractEvent:
+    async def extract_relevant_texts(self, ctx: Context, ev: RelevanceEvalEvent) -> TextExtractEvent:
         """Extract relevant texts from retrieved documents."""
         retrieved_nodes = await ctx.get("retrieved_nodes")
         relevancy_results = ev.relevant_results
 
-        relevant_texts = [
-            retrieved_nodes[i].text
-            for i, result in enumerate(relevancy_results)
-            if result == "yes"
-        ]
+        relevant_texts = [retrieved_nodes[i].text for i, result in enumerate(relevancy_results) if result == "yes"]
 
         result = "\n".join(relevant_texts)
         return TextExtractEvent(relevant_text=result)
 
     @step
-    async def transform_query_pipeline(
-        self, ctx: Context, ev: TextExtractEvent
-    ) -> QueryEvent:
+    async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
         """Search the transformed query with Tavily API."""
         relevant_text = ev.relevant_text
         relevancy_results = await ctx.get("relevancy_results")

@@ -25,7 +25,9 @@ from llama_index.core.workflow import (
 )
 
 # constants
-DEFAULT_CHUNK_SIZE = 4096  # optionally splits documents into CHUNK_SIZE, then regroups them to demonstrate grouping algorithm
+DEFAULT_CHUNK_SIZE = (
+    4096  # optionally splits documents into CHUNK_SIZE, then regroups them to demonstrate grouping algorithm
+)
 DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
@@ -97,9 +99,7 @@ def get_grouped_docs(
     # node IDs
     nodes_str = [node.id_ for node in nodes]
     # maps node ID -> related node IDs based on that node's relationships
-    adj: Dict[str, List[str]] = {
-        node.id_: [val.node_id for val in node.relationships.values()] for node in nodes
-    }
+    adj: Dict[str, List[str]] = {node.id_: [val.node_id for val in node.relationships.values()] for node in nodes}
     # node ID -> node
     nodes_dict = {node.id_: node for node in nodes}
 
@@ -156,9 +156,7 @@ class LongRAGRetriever(BaseRetriever):
         """
         # make query
         query_embedding = self._embed_model.get_query_embedding(query_bundle.query_str)
-        vector_store_query = VectorStoreQuery(
-            query_embedding=query_embedding, similarity_top_k=500
-        )
+        vector_store_query = VectorStoreQuery(query_embedding=query_embedding, similarity_top_k=500)
 
         # query for answer
         query_res = self._vec_store.query(vector_store_query)
@@ -222,9 +220,7 @@ class LongRAGWorkflow(Workflow):
             docs = StringIterableReader().load_data(texts=data_dir)
             # docs = SimpleDirectoryReader(data_dir).load_data()
             if chunk_size is not None:
-                nodes = split_doc(
-                    chunk_size, docs
-                )  # split documents into chunks of chunk_size
+                nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
                     nodes
                 )  # get list of nodes after grouping (groups are combined into one node), these are long retrieval units
