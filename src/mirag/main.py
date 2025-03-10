@@ -94,7 +94,7 @@ async def process_item(wf, item, index, llm, tavily_api_key):
         context_titles=context_titles,
         llm=llm,
         index=index["index"],
-        tavily_api_key=tavily_api_key,
+        # tavily_api_key=tavily_api_key,
     )
 
     is_exact_match = single_ans_em(res["short_answer"], answers)
@@ -300,7 +300,7 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100",
+        split="subset_100[:1]",
         # split="subset_1000[:5]",
         trust_remote_code=True,
     )
