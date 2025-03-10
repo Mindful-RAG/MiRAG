@@ -1,32 +1,28 @@
-import os
-import traceback
 import argparse
-import time
 import json
-from llama_index.core import Settings
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+import os
+import time
+import traceback
+
 import tiktoken
 from datasets import load_dataset
-from llama_index.llms.openai import OpenAI
-from llama_index.llms.gemini import Gemini
 
 # import nest_asyncio
 from dotenv import load_dotenv
-from icecream import ic
+from llama_index.core import Settings
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.gemini import Gemini
+from llama_index.llms.openai import OpenAI
+from loguru import logger
 from tqdm.asyncio import tqdm
 
-from mirag.metrics import has_correct_answer, single_ans_em
-from loguru import logger
-
-from mirag.workflows import MindfulRAGWorkflow
 from mirag.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_SMALL_CHUNK_SIZE,
     DEFAULT_TOP_K,
 )
-from llama_index.utils.workflow import (
-    draw_all_possible_flows,
-)
+from mirag.metrics import has_correct_answer, single_ans_em
+from mirag.workflows import MindfulRAGWorkflow
 
 load_dotenv()
 
@@ -46,7 +42,7 @@ def parse_arguments():
     parser.add_argument(
         "--output-file",
         type=str,
-        default="mirag_output.json",
+        default="mirag_output.jsonl",
         help="Output of the workflow",
     )
 
@@ -304,7 +300,7 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100[:1]",
+        split="subset_100",
         # split="subset_1000[:5]",
         trust_remote_code=True,
     )

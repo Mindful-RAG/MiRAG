@@ -17,7 +17,6 @@ from llama_index.core.workflow import (
     Workflow,
     step,
 )
-from llama_index.tools.tavily_research.base import TavilyToolSpec
 from loguru import logger
 
 from mirag.constants import DEFAULT_MAX_GROUP_SIZE
@@ -29,6 +28,7 @@ from mirag.prompts import (
     EXTRACT_ANSWER,
     PREDICT_LONG_ANSWER,
 )
+from utils.searxng import SearXNGClient
 
 load_dotenv()
 
@@ -212,7 +212,7 @@ class MindfulRAGWorkflow(Workflow):
         if query_str is None:
             return None
 
-        tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
+        # tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
         index = ev.get("index")
 
         # llm = Gemini(model="models/gemini-1.5-flash")
@@ -229,7 +229,8 @@ class MindfulRAGWorkflow(Workflow):
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
-        await ctx.set("tavily_tool", TavilyToolSpec(api_key=tavily_ai_apikey))
+        # await ctx.set("tavily_tool", TavilyToolSpec(api_key=tavily_ai_apikey))
+        await ctx.set("searxng", SearXNGClient(instance_url="http://localhost:8080"))
 
         await ctx.set("query_str", query_str)
         await ctx.set("context_titles", context_titles)
@@ -248,10 +249,11 @@ class MindfulRAGWorkflow(Workflow):
             return None
 
         index = await ctx.get("index", default=None)
-        tavily_tool = await ctx.get("tavily_tool", default=None)
-        if not (index or tavily_tool):
+        # tavily_tool = await ctx.get("tavily_tool", default=None)
+        searxng = await ctx.get("searxng", default=None)
+        if not (index or searxng):
             raise ValueError(
-                "Index and tavily tool must be constructed. Run with 'documents' and 'tavily_ai_apikey' params first."
+                "Index and searxng must be constructed. Run with 'documents' and 'searxng_url' params first."
             )
 
         # ic("in retrieve step", index)
@@ -309,10 +311,20 @@ class MindfulRAGWorkflow(Workflow):
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             qp = await ctx.get("transform_query_pipeline")
             transformed_query_str = qp.run(query_str=query_str).message.content
+            # logger.debug(f"Transformed query string: {transformed_query_str}")
+
             # Conduct a search with the transformed query string and collect the results.
-            tavily_tool = await ctx.get("tavily_tool")
-            search_results = tavily_tool.search(transformed_query_str, max_results=3)
-            search_text = "\n".join([result.text for result in search_results])
+            # tavily_tool: TavilyToolSpec = await ctx.get("tavily_tool")
+            searxng: SearXNGClient = await ctx.get("searxng")
+            searxng_results = searxng.get_content_for_llm(query=transformed_query_str, max_results=5)
+            # logger.debug(f"SearXNG results: {searxng_results}")
+
+            # search_results = tavily_tool.search(transformed_query_str, max_results=2)
+            # logger.debug(f"Search results: {search_results}")
+
+            # search_text = "\n".join([result.text for result in search_results])
+            search_text = "\n".join([result.content for result in searxng_results])
+            # logger.debug(f"Search text: {search_text}")
         else:
             logger.debug("LongRAG context fully relevant - no external search needed")
             search_text = ""
