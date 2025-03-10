@@ -1,7 +1,7 @@
-import unicodedata
 import string
-import regex
+import unicodedata
 
+import regex
 
 puncs = list(string.punctuation)
 
@@ -71,13 +71,13 @@ def single_ans_em(pred, gold):
 
 def has_correct_answer(retrieve_doc, answers):
     tokenizer = SimpleTokenizer()
-    # retrieve_doc = _normalize(retrieve_doc)
-    retrieve_doc = normalize_answer(retrieve_doc)
+    retrieve_doc = _normalize(retrieve_doc)
+    # retrieve_doc = normalize_answer(retrieve_doc)
     retrieve_doc = tokenizer.tokenize(retrieve_doc, uncased=True)
 
     for single_answer in answers:
-        # single_answer = _normalize(single_answer)
-        single_answer = normalize_answer(single_answer)
+        single_answer = _normalize(single_answer)
+        # single_answer = normalize_answer(single_answer)
         single_answer = tokenizer.tokenize(single_answer, uncased=True)
 
         for i in range(0, len(retrieve_doc) - len(single_answer) + 1):
