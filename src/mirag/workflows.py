@@ -316,6 +316,7 @@ class MindfulRAGWorkflow(Workflow):
             # tavily_tool: TavilyToolSpec = await ctx.get("tavily_tool")
             searxng: SearXNGClient = await ctx.get("searxng")
             searxng_results = searxng.get_content_for_llm(query=transformed_query_str, max_results=5)
+            # searxng_results = searxng.get_content_for_llm(query=query_str, max_results=5)
             # logger.debug(f"SearXNG results: {searxng_results}")
 
             # search_results = tavily_tool.search(transformed_query_str, max_results=2)

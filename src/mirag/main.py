@@ -443,7 +443,7 @@ async def main():
                 "status": "error",
             }
             json_string = json.dumps(error_output)
-            output_file.write(f"[{json_string}\n]")
+            output_file.write(f"{json_string}\n")
             results.append(error_output)
 
     # Second pass - retry failed items
