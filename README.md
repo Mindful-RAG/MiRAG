@@ -22,13 +22,13 @@ uv run mirag [arguments]
 |----------|------|---------|-------------|
 | `--llm` | string | `"gpt-4o-mini"` | LLM model to use for generation tasks. Examples: `"gpt-4o-mini"`, `"gpt-4o"`, `"gemini-1.5-flash"` |
 | `--embed_model` | string | `"BAAI/bge-large-en-v1.5"` | Embedding model to use for vector embeddings. Examples: `"BAAI/bge-large-en-v1.5"`, `"sentence-transformers/all-mpnet-base-v2"` |
-| `--output-file` | string | `"mirag_output.json"` | Path to the output file where results will be saved |
+| `--output-file` | string | `"mirag_output.jsonl"` | Path to the output file where results will be saved |
 | `--retry-attempts` | integer | `2` | Number of retry attempts for queries that fail during processing |
 | `--continue-from-file` | flag | - | Continue processing from a previous output file, focusing on error entries |
 | `--process-errors-only` | flag | - | Alias for `--continue-from-file`, process only the error entries in the output file |
-| `--persist-index` | flag | - | Persist the vector index to disk for reuse in future runs |
-| `--persist-path` | string | `"./persisted_index"` | Directory path where the index will be saved or loaded from |
-| `--load-index` | flag | - | Load a previously persisted index instead of creating a new one |
+| `--vector-db-path` | string | `"./chroma_db"` | Directory path where the vector database will be stored |
+| `--collection-name` | string | `"mirag_collection"` | Name of the collection in the vector database |
+| `--use-existing-db` | flag | - | Use an existing vector database collection if available |
 
 ## Example Commands
 
@@ -46,23 +46,23 @@ Use a different LLM or embedding model:
 uv run mirag --llm gpt-4o --embed_model "sentence-transformers/all-mpnet-base-v2"
 ```
 
-### Index Management
+### Vector Database Management
 
-Create and save index for future use:
+Create and use a specific vector database:
 ```bash
-uv run mirag --persist-index --persist-path ./my_project_index
+uv run mirag --vector-db-path ./my_project_vectors --collection-name my_project
 ```
 
-Load a previously saved index:
+Reuse an existing vector database:
 ```bash
-uv run mirag --load-index --persist-path ./my_project_index
+uv run mirag --use-existing-db --vector-db-path ./my_project_vectors --collection-name my_project
 ```
 
 ### Error Management
 
 Process a file with previous errors:
 ```bash
-uv run mirag --continue-from-file --output-file previous_run.json
+uv run mirag --continue-from-file --output-file previous_run.jsonl
 ```
 
 Run with more retry attempts for failed queries:
@@ -72,14 +72,14 @@ uv run mirag --retry-attempts 5
 
 ### Combined Workflow
 
-Complete workflow with index persistence and error handling:
+Complete workflow with vector database and error handling:
 ```bash
-uv run mirag --llm gpt-4o --persist-index --retry-attempts 3
+uv run mirag --llm gpt-4o --vector-db-path ./vectors --collection-name project_vectors --retry-attempts 3
 ```
 
-Continue from a previous run using a saved index:
+Continue from a previous run using an existing vector database:
 ```bash
-uv run mirag --load-index --persist-path ./my_project_index --continue-from-file
+uv run mirag --use-existing-db --vector-db-path ./vectors --collection-name project_vectors --continue-from-file
 ```
 
 ## Output Files
@@ -91,8 +91,9 @@ The script produces two main output files:
 ## Notes
 
 - The `TAVILY_API_KEY` environment variable is required for external search functionality
-- The `OPENAI_API_KEY` environment variable is required for openai completions
+- The `OPENAI_API_KEY` environment variable is required for OpenAI completions
 - The script requires GPU acceleration for efficient embedding generation
 - When using `--continue-from-file`, only failed entries are reprocessed, preserving successful ones
-- Persistent indexes can significantly speed up subsequent runs by avoiding recomputing embeddings
+- Vector database collections can significantly speed up subsequent runs by avoiding recomputing embeddings
+- ChromaDB is used as the vector database for storing and retrieving embeddings
 - A successful run will update both the main output file and the summary file with current statistics

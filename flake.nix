@@ -116,6 +116,7 @@
             pkgs.rocmPackages.rocminfo
             pkgs.gcc
             pkgs.cmake
+            pkgs.zlib
           ];
           env = {
             # Prevent uv from managing Python downloads
@@ -129,6 +130,7 @@
             LD_LIBRARY_PATH = lib.makeLibraryPath [
               pkgs.stdenv.cc.cc
               pkgs.zstd
+              pkgs.zlib
             ];
           };
           # // lib.optionalAttrs pkgs.stdenv.isLinux {
