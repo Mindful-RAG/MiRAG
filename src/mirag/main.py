@@ -6,8 +6,6 @@ import traceback
 
 import tiktoken
 from datasets import load_dataset
-
-# import nest_asyncio
 from dotenv import load_dotenv
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -23,10 +21,12 @@ from mirag.constants import (
 )
 from mirag.metrics import has_correct_answer, single_ans_em
 from mirag.workflows import MindfulRAGWorkflow
+from utils.searxng import SearXNGClient
 
 load_dotenv()
 
-# nest_asyncio.apply()
+
+logger.disable(name="mirag.workflows")
 
 
 def parse_arguments():
@@ -78,11 +78,16 @@ def parse_arguments():
         action="store_true",
         help="Load index from disk instead of creating a new one",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logs",
+    )
 
     return parser.parse_args()
 
 
-async def process_item(wf, item, index, llm, tavily_api_key):
+async def process_item(wf, item, index, llm, searxng):
     """Process a single dataset item with error handling"""
     query, answers = item["query"], item["answer"]
     context_titles, context = item["context_titles"], item["context"]
@@ -94,7 +99,7 @@ async def process_item(wf, item, index, llm, tavily_api_key):
         context_titles=context_titles,
         llm=llm,
         index=index["index"],
-        # tavily_api_key=tavily_api_key,
+        searxng=searxng,
     )
 
     is_exact_match = single_ans_em(res["short_answer"], answers)
@@ -154,7 +159,7 @@ def get_item_from_dataset(dataset, item_id):
     return None
 
 
-async def continue_from_previous_file(args, dataset, wf, index, llm, tavily_api_key):
+async def continue_from_previous_file(args, dataset, wf, index, llm, searxng):
     """Continue processing from a previous output file by filling in error entries"""
     results, error_items = load_previous_results(args.output_file)
 
@@ -182,7 +187,7 @@ async def continue_from_previous_file(args, dataset, wf, index, llm, tavily_api_
             continue
 
         try:
-            output, context_size = await process_item(wf, dataset_item, index, llm, tavily_api_key)
+            output, context_size = await process_item(wf, dataset_item, index, llm, searxng)
             context_sizes.append(context_size)
 
             if output["status"] == "correct":
@@ -277,6 +282,10 @@ def update_summary_file(output_file, results):
 
 async def main():
     args = parse_arguments()
+    if args.debug:
+        logger.enable("mirag.workflows")
+
+    searxng = SearXNGClient(instance_url="http://localhost:8080")
 
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=args.embed_model,
@@ -300,17 +309,10 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100[:1]",
-        # split="subset_1000[:5]",
+        split="subset_100",
+        # split="subset_1000",
         trust_remote_code=True,
     )
-
-    # Create a list of strings that combines titles and context
-    combined_texts = []
-    for item in dataset:
-        # Combine title and content in each string
-        text = f"Title: {item['context_titles']}\n\nContent: {item['context']}"
-        combined_texts.append(text)
 
     logger.info("loading index")
 
@@ -349,7 +351,7 @@ async def main():
     if index is None:
         logger.info("Creating new index")
         index = await wf.run(
-            dataset=combined_texts,
+            dataset=dataset["context"],
             llm=llm,
             chunk_size=DEFAULT_CHUNK_SIZE,
             similarity_top_k=DEFAULT_TOP_K,
@@ -372,23 +374,8 @@ async def main():
 
     # Check if we're continuing from a previous file
     if args.continue_from_file or args.process_errors_only:
-        await continue_from_previous_file(args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY"))
+        await continue_from_previous_file(args, dataset, wf, index, llm, searxng)
         return
-
-    # index = await wf.run(
-    #     dataset=combined_texts,
-    #     llm=llm,
-    #     chunk_size=DEFAULT_CHUNK_SIZE,
-    #     similarity_top_k=DEFAULT_TOP_K,
-    #     small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
-    # )
-
-    # # Check if we're continuing from a previous file
-    # if args.continue_from_file or args.process_errors_only:
-    #     await continue_from_previous_file(
-    #         args, dataset, wf, index, llm, os.getenv("TAVILY_API_KEY")
-    #     )
-    #     return
 
     logger.info("running query")
 
@@ -398,7 +385,6 @@ async def main():
     context_sizes = []
     enc = tiktoken.get_encoding("cl100k_base")
     dataset_size = len(dataset)
-    tavily_api_key = os.getenv("TAVILY_API_KEY")
 
     output_file = open(args.output_file, "w")
     failed_items = []
@@ -406,7 +392,7 @@ async def main():
 
     for i, item in enumerate(tqdm(dataset, desc="Querying")):
         try:
-            output, context_size = await process_item(wf, item, index, llm, tavily_api_key)
+            output, context_size = await process_item(wf, item, index, llm, searxng)
 
             context_sizes.append(context_size)
 
@@ -465,7 +451,7 @@ async def main():
 
             for item in tqdm(items_to_retry, desc=f"Retry #{retry_count}"):
                 try:
-                    output, context_size = await process_item(wf, item, index, llm, tavily_api_key)
+                    output, context_size = await process_item(wf, item, index, llm, searxng)
                     context_sizes.append(context_size)
 
                     if output["status"] == "correct":

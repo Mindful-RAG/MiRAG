@@ -7,7 +7,6 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.core.readers import StringIterableReader
-from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.workflow import (
     Context,
@@ -121,15 +120,7 @@ class MindfulRAGWorkflow(Workflow):
 
     @step
     async def ingest(self, ctx: Context, ev: StartEvent) -> LoadNodeEvent | None:
-        """Ingestion step.
-
-        Args:
-            ctx (Context): Context object
-            ev (StartEvent): StartEvent object
-
-        Returns:
-            LoadNodeEvent or None
-        """
+        """Ingestion step."""
         dataset: str | List[str] = ev.get("dataset")
         llm: LLM = ev.get("llm")
         chunk_size: int | None = ev.get("chunk_size")
@@ -160,7 +151,6 @@ class MindfulRAGWorkflow(Workflow):
             small_nodes = index.docstore.docs.values()
             grouped_nodes = get_grouped_docs(small_nodes, None)
 
-        # ic("ingest step")
         return LoadNodeEvent(
             small_nodes=small_nodes,
             grouped_nodes=grouped_nodes,
@@ -207,14 +197,13 @@ class MindfulRAGWorkflow(Workflow):
         context_titles: str | None = ev.get("context_titles")
         retriever_kwargs: dict | None = ev.get("retriever_kwargs", {})
         llm: LLM = ev.get("llm")
+        searxng: SearXNGClient = ev.get("searxng")
 
         if query_str is None:
             return None
 
-        # tavily_ai_apikey: str | None = ev.get("tavily_ai_apikey")
         index = ev.get("index")
-
-        # llm = Gemini(model="models/gemini-1.5-flash")
+        retriever = ev.get("retriever")
 
         await ctx.set(
             "relevancy_pipeline",
@@ -228,8 +217,8 @@ class MindfulRAGWorkflow(Workflow):
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
-        # await ctx.set("tavily_tool", TavilyToolSpec(api_key=tavily_ai_apikey))
-        await ctx.set("searxng", SearXNGClient(instance_url="http://localhost:8080"))
+        await ctx.set("retriever", retriever)
+        await ctx.set("searxng", searxng)
 
         await ctx.set("query_str", query_str)
         await ctx.set("context_titles", context_titles)
@@ -243,12 +232,12 @@ class MindfulRAGWorkflow(Workflow):
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
         retriever_kwargs = await ctx.get("retriever_kwargs")
+        retriever = await ctx.get("retriever")
 
         if query_str is None:
             return None
 
         index = await ctx.get("index", default=None)
-        # tavily_tool = await ctx.get("tavily_tool", default=None)
         searxng = await ctx.get("searxng", default=None)
         if not (index or searxng):
             raise ValueError(
@@ -256,7 +245,7 @@ class MindfulRAGWorkflow(Workflow):
             )
 
         # ic("in retrieve step", index)
-        retriever: BaseRetriever = index.as_retriever(**retriever_kwargs)
+        retriever: LongRAGRetriever = index.as_retriever(**retriever_kwargs)
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
@@ -271,14 +260,19 @@ class MindfulRAGWorkflow(Workflow):
         """Evaluate relevancy of retrieved documents with the query."""
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
+        relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.7)
 
         relevancy_results = []
         for node in retrieved_nodes:
-            relevancy_pipeline = await ctx.get("relevancy_pipeline")
-            relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
-            relevancy_results.append(relevancy.message.content.lower().strip())
-
-        # c("eval_relevance step", relevancy_results)
+            # Automatically consider documents with high similarity scores as relevant
+            if hasattr(node, "score") and node.score is not None and node.score >= relevancy_score_threshold:
+                relevancy_results.append("yes")
+                logger.debug(f"Document with score {node.score} automatically marked as relevant")
+            else:
+                # Only use LLM evaluation for documents below the threshold
+                relevancy_pipeline = await ctx.get("relevancy_pipeline")
+                relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
+                relevancy_results.append(relevancy.message.content.lower().strip())
 
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
@@ -300,7 +294,7 @@ class MindfulRAGWorkflow(Workflow):
 
     @step
     async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
-        """Search the transformed query with Tavily API."""
+        """Search the transformed query with SearXNG."""
         relevant_text = ev.relevant_text
         relevancy_results = await ctx.get("relevancy_results")
         query_str = await ctx.get("query_str")
@@ -313,13 +307,9 @@ class MindfulRAGWorkflow(Workflow):
             # logger.debug(f"Transformed query string: {transformed_query_str}")
 
             # Conduct a search with the transformed query string and collect the results.
-            # tavily_tool: TavilyToolSpec = await ctx.get("tavily_tool")
             searxng: SearXNGClient = await ctx.get("searxng")
             searxng_results = searxng.get_content_for_llm(query=transformed_query_str, max_results=5)
-            # searxng_results = searxng.get_content_for_llm(query=query_str, max_results=5)
-            # logger.debug(f"SearXNG results: {searxng_results}")
 
-            # search_results = tavily_tool.search(transformed_query_str, max_results=2)
             # logger.debug(f"Search results: {search_results}")
 
             # search_text = "\n".join([result.text for result in search_results])
