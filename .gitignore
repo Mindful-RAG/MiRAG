@@ -171,3 +171,4 @@ model_scifact
 enwiki*
 .embeddings
 index*
+!src/mirag/index*
