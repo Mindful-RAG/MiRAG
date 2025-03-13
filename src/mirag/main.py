@@ -2,6 +2,7 @@ import json
 import time
 import traceback
 
+import uvloop
 from datasets import load_dataset
 from dotenv import load_dotenv
 from llama_index.core import Settings
@@ -11,6 +12,7 @@ from llama_index.llms.openai import OpenAI
 from loguru import logger
 from tqdm.asyncio import tqdm
 
+from mirag.api import run_api
 from mirag.cli import CLI
 from mirag.data_processing import DataProcessor
 from mirag.index_management import IndexManager
@@ -183,13 +185,19 @@ async def main():
 
 
 def run():
-    import uvloop
+    """Entry point for the MiRAG application"""
 
-    logger.info("Starting main execution.")
-    start = time.time()
-    uvloop.run(main())
-    runtime = time.time() - start
-    logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
+    args = CLI.parse_arguments()
+
+    if args.command == "api":
+        # Run the API server directly with uvicorn
+        run_api(host=args.host, port=args.port, reload=args.reload)
+    else:
+        logger.info("Starting MiRAG execution.")
+        start = time.time()
+        uvloop.run(main())
+        runtime = time.time() - start
+        logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
 
 
 if __name__ == "__main__":
