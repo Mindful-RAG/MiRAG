@@ -5,7 +5,6 @@ from llama_index.core import VectorStoreIndex
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.query_pipeline import QueryPipeline
 from llama_index.core.readers import StringIterableReader
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.workflow import (
@@ -205,14 +204,14 @@ class MindfulRAGWorkflow(Workflow):
         index = ev.get("index")
         retriever = ev.get("retriever")
 
-        await ctx.set(
-            "relevancy_pipeline",
-            QueryPipeline(chain=[DEFAULT_RELEVANCY_PROMPT_TEMPLATE, llm]),
-        )
-        await ctx.set(
-            "transform_query_pipeline",
-            QueryPipeline(chain=[DEFAULT_TRANSFORM_QUERY_TEMPLATE, llm]),
-        )
+        # await ctx.set(
+        #     "relevancy_pipeline",
+        #     QueryPipeline(chain=[DEFAULT_RELEVANCY_PROMPT_TEMPLATE, llm]),
+        # )
+        # await ctx.set(
+        #     "transform_query_pipeline",
+        #     QueryPipeline(chain=[DEFAULT_TRANSFORM_QUERY_TEMPLATE, llm]),
+        # )
         # ic(llm)
 
         await ctx.set("llm", llm)
@@ -270,9 +269,13 @@ class MindfulRAGWorkflow(Workflow):
                 logger.debug(f"Document with score {node.score} automatically marked as relevant")
             else:
                 # Only use LLM evaluation for documents below the threshold
-                relevancy_pipeline = await ctx.get("relevancy_pipeline")
-                relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
-                relevancy_results.append(relevancy.message.content.lower().strip())
+                llm: LLM = await ctx.get("llm")
+                # relevancy_pipeline = await ctx.get("relevancy_pipeline")
+                # relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
+                relevancy = await llm.apredict(
+                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE, centext_str=node.text, query_str=query_str
+                )
+                relevancy_results.append(relevancy)
 
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
@@ -302,8 +305,10 @@ class MindfulRAGWorkflow(Workflow):
         # If any document is found irrelevant, transform the query string for better search results.
         if "no" in relevancy_results:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
-            qp = await ctx.get("transform_query_pipeline")
-            transformed_query_str = qp.run(query_str=query_str).message.content
+            llm: LLM = await ctx.get("llm")
+            # qp = await ctx.get("transform_query_pipeline"
+            # transformed_query_str = qp.run(query_str=query_str).message.content
+            transformed_query_str = await llm.apredict(prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE, query_str=query_str)
             # logger.debug(f"Transformed query string: {transformed_query_str}")
 
             # Conduct a search with the transformed query string and collect the results.
@@ -325,7 +330,7 @@ class MindfulRAGWorkflow(Workflow):
     @step
     async def metrics(self, ctx: Context, ev: QueryEvent) -> StopEvent:
         """Get result with relevant text."""
-        llm = await ctx.get("llm")
+        llm: LLM = await ctx.get("llm")
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
@@ -345,24 +350,19 @@ class MindfulRAGWorkflow(Workflow):
         if search_text:
             context_with_attribution = f"[Web Search]: {search_text}\n" + context_with_attribution
 
-        long_answer_qp = QueryPipeline(chain=[PREDICT_LONG_ANSWER, llm])
-        long_answer_query = long_answer_qp.run(
-            titles=context_titles,
+        long_answer = await llm.apredict(
+            prompt=PREDICT_LONG_ANSWER,
+            context_titles=context_titles,
+            question=query_str,
             context=context_with_attribution,
-            question=query_str,
         )
-        long_answer = long_answer_query.message.content.lower().strip()
 
-        qp = QueryPipeline(chain=[EXTRACT_ANSWER, llm])
-        short_answer = qp.run(
-            question=query_str,
-            long_answer=str(long_answer),
-        )
+        short_answer = await llm.apredict(prompt=EXTRACT_ANSWER, question=query_str, long_answer=long_answer)
 
         return StopEvent(
             result={
                 "long_answer": long_answer,
-                "short_answer": short_answer.message.content.lower().strip(),
+                "short_answer": short_answer,
                 "status": status,
             }
         )

@@ -35,8 +35,8 @@ class DataProcessor:
             "id": item["query_id"],
             "query": query,
             "answer": answers,
-            "long_answer": res["long_answer"],
-            "short_answer": res["short_answer"],
+            "long_answer": res["long_answer"].lower().strip(),
+            "short_answer": res["short_answer"].lower().strip(),
             "is_exact_match": is_exact_match,
             "is_substring_match": is_substring_match,
             "status": res["status"],  # correct|ambiguous|incorrect
