@@ -12,7 +12,6 @@ requires-python = ">=3.12"
 dependencies = [
     "datasets>=3.2.0",
     "google-genai>=1.0.0",
-    "gradcache>=0.0.1",
     "huggingface-hub>=0.28.1",
     "llama-index>=0.12.19",
     "llama-index-embeddings-huggingface>=0.5.1",
@@ -22,12 +21,10 @@ dependencies = [
     "nest-asyncio>=1.6.0",
     "numpy>=2.2.2",
     "python-dotenv>=1.0.1",
-    "tevatron",
     "tiktoken>=0.8.0",
     "tqdm>=4.67.1",
     "transformers>=4.48.3",
     "uvloop>=0.21.0",
-    "wikiextractor",
     "torch",
     "pytorch-triton-rocm",
     "chromadb>=0.6.3",
@@ -35,6 +32,7 @@ dependencies = [
     "loguru>=0.7.3",
     "uvicorn>=0.34.0",
     "fastapi>=0.115.11",
+    "llama-index-readers-huggingface-fs>=0.3.1",
 ]
 
 [dependency-groups]
@@ -56,9 +54,6 @@ build-backend = "hatchling.build"
 
 
 [tool.uv.sources]
-wikiextractor = { git = "https://github.com/attardi/wikiextractor.git", rev = "ab8988ebfa9e4557411f3d4c0f4ccda139e18875" }
-gradcache = { git = "https://github.com/luyug/GradCache" }
-tevatron = { path = "../tevatron" }
 torch = [
   { index = "pytorch-rocm" },
 ]
