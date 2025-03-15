@@ -158,7 +158,7 @@ class MindfulRAGWorkflow(Workflow):
             llm=llm,
         )
 
-    @step
+    @step(pass_context=True)
     async def make_query_engine(self, ctx: Context, ev: LoadNodeEvent) -> StopEvent:
         """Query engine construction step.
 
@@ -188,7 +188,7 @@ class MindfulRAGWorkflow(Workflow):
             }
         )
 
-    @step
+    @step(pass_context=True)
     async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
         """Prepare for retrieval."""
 
@@ -202,36 +202,22 @@ class MindfulRAGWorkflow(Workflow):
             return None
 
         index = ev.get("index")
-        retriever = ev.get("retriever")
-
-        # await ctx.set(
-        #     "relevancy_pipeline",
-        #     QueryPipeline(chain=[DEFAULT_RELEVANCY_PROMPT_TEMPLATE, llm]),
-        # )
-        # await ctx.set(
-        #     "transform_query_pipeline",
-        #     QueryPipeline(chain=[DEFAULT_TRANSFORM_QUERY_TEMPLATE, llm]),
-        # )
-        # ic(llm)
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
-        await ctx.set("retriever", retriever)
         await ctx.set("searxng", searxng)
 
         await ctx.set("query_str", query_str)
         await ctx.set("context_titles", context_titles)
         await ctx.set("retriever_kwargs", retriever_kwargs)
 
-        # ic("prepare step")
         return PrepEvent()
 
-    @step
+    @step(pass_context=True)
     async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent | None:
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
         retriever_kwargs = await ctx.get("retriever_kwargs")
-        retriever = await ctx.get("retriever")
 
         if query_str is None:
             return None
@@ -245,6 +231,7 @@ class MindfulRAGWorkflow(Workflow):
 
         # ic("in retrieve step", index)
         retriever: LongRAGRetriever = index.as_retriever(**retriever_kwargs)
+        # retriever: LongRAGRetriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
@@ -254,7 +241,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("query_str", query_str)
         return RetrieveEvent(retrieved_nodes=result)
 
-    @step
+    @step(pass_context=True)
     async def eval_relevance(self, ctx: Context, ev: RetrieveEvent) -> RelevanceEvalEvent:
         """Evaluate relevancy of retrieved documents with the query."""
         retrieved_nodes = ev.retrieved_nodes
@@ -270,12 +257,14 @@ class MindfulRAGWorkflow(Workflow):
             else:
                 # Only use LLM evaluation for documents below the threshold
                 llm: LLM = await ctx.get("llm")
-                # relevancy_pipeline = await ctx.get("relevancy_pipeline")
-                # relevancy = relevancy_pipeline.run(context_str=node.text, query_str=query_str)
-                relevancy = await llm.apredict(
-                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE, centext_str=node.text, query_str=query_str
+                relevancy = llm.complete(
+                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(context_str=node.text, query_str=query_str)
                 )
-                relevancy_results.append(relevancy)
+                logger.debug(relevancy)
+                # relevancy_results.append(relevancy.message.content.lower().strip())
+                # relevancy_results.append(relevancy)
+                relevancy_results.append(relevancy.text.lower().strip())
+                logger.debug(relevancy_results)
 
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
@@ -283,7 +272,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
-    @step
+    @step(pass_context=True)
     async def extract_relevant_texts(self, ctx: Context, ev: RelevanceEvalEvent) -> TextExtractEvent:
         """Extract relevant texts from retrieved documents."""
         retrieved_nodes = await ctx.get("retrieved_nodes")
@@ -295,7 +284,7 @@ class MindfulRAGWorkflow(Workflow):
         # ic("extract_relevant_texts step", result)
         return TextExtractEvent(relevant_text=result)
 
-    @step
+    @step(pass_context=True)
     async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
         """Search the transformed query with SearXNG."""
         relevant_text = ev.relevant_text
@@ -306,28 +295,21 @@ class MindfulRAGWorkflow(Workflow):
         if "no" in relevancy_results:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
-            # qp = await ctx.get("transform_query_pipeline"
-            # transformed_query_str = qp.run(query_str=query_str).message.content
-            transformed_query_str = await llm.apredict(prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE, query_str=query_str)
+            transformed_query_str = llm.complete(prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=query_str))
             # logger.debug(f"Transformed query string: {transformed_query_str}")
 
             # Conduct a search with the transformed query string and collect the results.
             searxng: SearXNGClient = await ctx.get("searxng")
-            searxng_results = searxng.get_content_for_llm(query=transformed_query_str, max_results=5)
+            searxng_results = searxng.get_content_for_llm(query=transformed_query_str.text, max_results=10)
 
-            # logger.debug(f"Search results: {search_results}")
-
-            # search_text = "\n".join([result.text for result in search_results])
             search_text = "\n".join([result.content for result in searxng_results])
-            # logger.debug(f"Search text: {search_text}")
         else:
             logger.debug("LongRAG context fully relevant - no external search needed")
             search_text = ""
 
-        # ic("transform_query_pipeline step", relevancy_results)
         return QueryEvent(relevant_text=relevant_text, search_text=search_text)
 
-    @step
+    @step(pass_context=True)
     async def metrics(self, ctx: Context, ev: QueryEvent) -> StopEvent:
         """Get result with relevant text."""
         llm: LLM = await ctx.get("llm")
@@ -346,23 +328,21 @@ class MindfulRAGWorkflow(Workflow):
             status = "ambiguous"
 
         # Prepend "web search" if search_text is present
-        context_with_attribution = relevant_text
-        if search_text:
-            context_with_attribution = f"[Web Search]: {search_text}\n" + context_with_attribution
+        context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        long_answer = await llm.apredict(
-            prompt=PREDICT_LONG_ANSWER,
-            context_titles=context_titles,
-            question=query_str,
-            context=context_with_attribution,
+        long_answer = llm.complete(
+            prompt=PREDICT_LONG_ANSWER.format(
+                titles=context_titles, question=query_str, context=context_with_attribution
+            ),
         )
-
-        short_answer = await llm.apredict(prompt=EXTRACT_ANSWER, question=query_str, long_answer=long_answer)
+        short_answer = llm.complete(
+            prompt=EXTRACT_ANSWER.format(long_answer=long_answer.text, question=query_str),
+        )
 
         return StopEvent(
             result={
-                "long_answer": long_answer,
-                "short_answer": short_answer,
+                "long_answer": long_answer.text,
+                "short_answer": short_answer.text,
                 "status": status,
             }
         )

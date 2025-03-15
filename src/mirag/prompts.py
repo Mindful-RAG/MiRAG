@@ -23,14 +23,15 @@ DEFAULT_RELEVANCY_PROMPT_TEMPLATE = PromptTemplate(
 )
 
 DEFAULT_TRANSFORM_QUERY_TEMPLATE = PromptTemplate(
-    template="""Your task is to refine a query to ensure it is highly effective for retrieving relevant search results. \n
-    Analyze the given input to grasp the core semantic intent or meaning. \n
+    template="""\
+    You are a question re-writer that converts an input question to a better version that is optimized
+    for web search. Look at the input and try to reason about the underlying semantic intent / meaning.
     Original Query:
-    \n ------- \n
+    -------
     {query_str}
-    \n ------- \n
-    Your goal is to rephrase or enhance this query to improve its search performance. Ensure the revised query is concise and directly aligned with the intended search objective. \n
-    Respond with the optimized query only:"""
+    -------
+    Formulate an improved question.\
+    """
 )
 
 PREDICT_LONG_ANSWER = PromptTemplate(
@@ -41,8 +42,7 @@ PREDICT_LONG_ANSWER = PromptTemplate(
     The context is a list of Wikipedia documents, ordered by title: {titles}.
     Each Wikipedia document contains a 'title' field and a 'text' field.
 
-    If the context has '[Web Search]:', the context came from a web search.
-    Choose the most relevant document from the context and extract the answer from it.
+    Choose the most relevant text from the context and extract the answer from it.
 
     The context is: {context}.
     The question: {question}.\

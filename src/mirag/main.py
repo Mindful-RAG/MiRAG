@@ -2,7 +2,7 @@ import json
 import time
 import traceback
 
-import uvloop
+import nest_asyncio
 from datasets import load_dataset
 from dotenv import load_dotenv
 from llama_index.core import Settings
@@ -18,7 +18,10 @@ from mirag.data_processing import DataProcessor
 from mirag.index_management import IndexManager
 from mirag.result_handling import ResultHandler
 from mirag.workflows import MindfulRAGWorkflow
+from utils.async_utils import asyncio_run
 from utils.searxng import SearXNGClient
+
+nest_asyncio.apply()
 
 load_dotenv()
 logger.disable(name="mirag.workflows")
@@ -51,7 +54,7 @@ async def main():
     dataset = load_dataset(
         "TIGER-LAB/LongRAG",
         "nq",
-        split="subset_100",
+        split=args.split,
         trust_remote_code=True,
     )
 
@@ -195,7 +198,7 @@ def run():
     else:
         logger.info("Starting MiRAG execution.")
         start = time.time()
-        uvloop.run(main())
+        asyncio_run(main())
         runtime = time.time() - start
         logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
 

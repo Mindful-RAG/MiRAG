@@ -19,6 +19,12 @@ class CLI:
             help="embeddings model to use",
         )
         cli_parser.add_argument(
+            "--split",
+            type=str,
+            default="subset_100",
+            help="Dataset split to use",
+        )
+        cli_parser.add_argument(
             "--output-file",
             type=str,
             default="mirag_output.jsonl",
