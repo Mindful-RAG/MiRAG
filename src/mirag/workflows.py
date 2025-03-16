@@ -1,11 +1,10 @@
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from dotenv import load_dotenv
-from llama_index.core import VectorStoreIndex
+from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
-from llama_index.core.readers import StringIterableReader
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.workflow import (
     Context,
@@ -18,6 +17,7 @@ from loguru import logger
 
 from mirag.constants import DEFAULT_MAX_GROUP_SIZE
 from mirag.events import LoadNodeEvent, PrepEvent, QueryEvent, RelevanceEvalEvent, RetrieveEvent, TextExtractEvent
+from mirag.hf_document import hf_dataset_to_documents
 from mirag.longrag_retriever import LongRAGRetriever
 from mirag.prompts import (
     DEFAULT_RELEVANCY_PROMPT_TEMPLATE,
@@ -117,10 +117,10 @@ def get_grouped_docs(
 class MindfulRAGWorkflow(Workflow):
     """Mindful RAG Workflow"""
 
-    @step
+    @step(num_workers=8)
     async def ingest(self, ctx: Context, ev: StartEvent) -> LoadNodeEvent | None:
         """Ingestion step."""
-        dataset: str | List[str] = ev.get("dataset")
+        dataset: List[str] | List[Document] = ev.get("dataset")
         llm: LLM = ev.get("llm")
         chunk_size: int | None = ev.get("chunk_size")
         similarity_top_k: int = ev.get("similarity_top_k")
@@ -131,7 +131,8 @@ class MindfulRAGWorkflow(Workflow):
         if any(i is None for i in [dataset, llm, similarity_top_k, small_chunk_size]):
             return None
         if not index:
-            docs = StringIterableReader().load_data(texts=dataset)
+            # docs = StringIterableReader().load_data(texts=dataset)
+            docs = hf_dataset_to_documents(dataset=dataset, text_field="context", metadata_fields=["context_titles"])
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -143,13 +144,17 @@ class MindfulRAGWorkflow(Workflow):
             # split large retrieval units into smaller nodes
             small_nodes = split_doc(small_chunk_size, grouped_nodes)
 
+            logger.debug("ran in if")
             index_kwargs = index_kwargs or {}
             index = VectorStoreIndex(small_nodes, **index_kwargs)
         else:
             # get smaller nodes from index and form large retrieval units from these nodes
             small_nodes = index.docstore.docs.values()
             grouped_nodes = get_grouped_docs(small_nodes, None)
+            logger.debug("ran in else")
 
+        # logger.debug(grouped_nodes)
+        # logger.debug(small_nodes)
         return LoadNodeEvent(
             small_nodes=small_nodes,
             grouped_nodes=grouped_nodes,
@@ -158,7 +163,7 @@ class MindfulRAGWorkflow(Workflow):
             llm=llm,
         )
 
-    @step(pass_context=True)
+    @step(pass_context=True, num_workers=8)
     async def make_query_engine(self, ctx: Context, ev: LoadNodeEvent) -> StopEvent:
         """Query engine construction step.
 
@@ -213,7 +218,7 @@ class MindfulRAGWorkflow(Workflow):
 
         return PrepEvent()
 
-    @step(pass_context=True)
+    @step(pass_context=True, num_workers=8)
     async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent | None:
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
@@ -222,7 +227,7 @@ class MindfulRAGWorkflow(Workflow):
         if query_str is None:
             return None
 
-        index = await ctx.get("index", default=None)
+        index: VectorStoreIndex = await ctx.get("index", default=None)
         searxng = await ctx.get("searxng", default=None)
         if not (index or searxng):
             raise ValueError(
@@ -230,8 +235,11 @@ class MindfulRAGWorkflow(Workflow):
             )
 
         # ic("in retrieve step", index)
-        retriever: LongRAGRetriever = index.as_retriever(**retriever_kwargs)
-        # retriever: LongRAGRetriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
+        # getretrieve = retrieve.retrieve(query_str)
+        # logger.debug(getretrieve)
+        # retriever = index.as_retriever(**retriever_kwargs)
+        retriever = index.as_retriever(similarity_top_k=8)
+        # result = retrieve.retrieve(query_str)
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
@@ -258,7 +266,9 @@ class MindfulRAGWorkflow(Workflow):
                 # Only use LLM evaluation for documents below the threshold
                 llm: LLM = await ctx.get("llm")
                 relevancy = llm.complete(
-                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(context_str=node.text, query_str=query_str)
+                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
+                        context_str=node.text, metadata=node.metadata, query_str=query_str
+                    )
                 )
                 logger.debug(relevancy)
                 # relevancy_results.append(relevancy.message.content.lower().strip())
@@ -290,9 +300,10 @@ class MindfulRAGWorkflow(Workflow):
         relevant_text = ev.relevant_text
         relevancy_results = await ctx.get("relevancy_results")
         query_str = await ctx.get("query_str")
-
+        relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         # If any document is found irrelevant, transform the query string for better search results.
-        if "no" in relevancy_results:
+        # if "no" in relevancy_results:
+        if relevancy_count / len(relevancy_results) < 0.5:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
             transformed_query_str = llm.complete(prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=query_str))

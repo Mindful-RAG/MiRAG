@@ -7,6 +7,10 @@ DEFAULT_RELEVANCY_PROMPT_TEMPLATE = PromptTemplate(
     -------------------
     {context_str}
 
+    Metadata:
+    ---------
+    {metadata}
+
     User Question:
     --------------
     {query_str}

@@ -53,7 +53,7 @@ class IndexManager:
         if index is None and dataset is not None:
             logger.info("Creating new index")
             index = await self.wf.run(
-                dataset=dataset["context"],
+                dataset=dataset,
                 llm=self.llm,
                 chunk_size=DEFAULT_CHUNK_SIZE,
                 similarity_top_k=DEFAULT_TOP_K,

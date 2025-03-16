@@ -1,6 +1,7 @@
+from typing import List, Set
+
 from llama_index.core import QueryBundle, Settings
 from llama_index.core.retrievers import BaseRetriever
-from typing import List, Set
 from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
