@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from dotenv import load_dotenv
@@ -117,7 +118,7 @@ def get_grouped_docs(
 class MindfulRAGWorkflow(Workflow):
     """Mindful RAG Workflow"""
 
-    @step(num_workers=8)
+    @step(num_workers=16)
     async def ingest(self, ctx: Context, ev: StartEvent) -> LoadNodeEvent | None:
         """Ingestion step."""
         dataset: List[str] | List[Document] = ev.get("dataset")
@@ -163,7 +164,7 @@ class MindfulRAGWorkflow(Workflow):
             llm=llm,
         )
 
-    @step(pass_context=True, num_workers=8)
+    @step(pass_context=True)
     async def make_query_engine(self, ctx: Context, ev: LoadNodeEvent) -> StopEvent:
         """Query engine construction step.
 
@@ -218,7 +219,7 @@ class MindfulRAGWorkflow(Workflow):
 
         return PrepEvent()
 
-    @step(pass_context=True, num_workers=8)
+    @step(pass_context=True)
     async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent | None:
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
@@ -243,7 +244,7 @@ class MindfulRAGWorkflow(Workflow):
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
-        logger.debug(f"LongRAG retrieval scores: {[node.score for node in result]}")
+        # logger.debug(f"LongRAG retrieval scores: {[node.score for node in result]}")
 
         await ctx.set("retrieved_nodes", result)
         await ctx.set("query_str", query_str)
@@ -255,30 +256,53 @@ class MindfulRAGWorkflow(Workflow):
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
         relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.7)
+        llm: LLM = await ctx.get("llm")
 
-        relevancy_results = []
-        for node in retrieved_nodes:
-            # Automatically consider documents with high similarity scores as relevant
+        async def evaluate_node_relevance(node):
             if hasattr(node, "score") and node.score is not None and node.score >= relevancy_score_threshold:
-                relevancy_results.append("yes")
-                logger.debug(f"Document with score {node.score} automatically marked as relevant")
+                # relevancy_results.append("yes")
+                return "yes"
             else:
-                # Only use LLM evaluation for documents below the threshold
-                llm: LLM = await ctx.get("llm")
-                relevancy = llm.complete(
-                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
-                        context_str=node.text, metadata=node.metadata, query_str=query_str
+                async with asyncio.Semaphore(5):
+                    relevancy = await llm.acomplete(
+                        prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
+                            context_str=node.text, metadata=node.metadata, query_str=query_str
+                        )
                     )
-                )
-                logger.debug(relevancy)
-                # relevancy_results.append(relevancy.message.content.lower().strip())
-                # relevancy_results.append(relevancy)
-                relevancy_results.append(relevancy.text.lower().strip())
-                logger.debug(relevancy_results)
+                    # relevancy_results.append(relevancy.text.lower().strip())
+                    return relevancy.text.lower().strip()
 
+        # tasks = []
+        # for node in retrieved_nodes:
+        #     task = asyncio.create_task(get_relevancy(node))
+        #     tasks.append(task)
+        # Automatically consider documents with high similarity scores as relevant
+        # if hasattr(node, "score") and node.score is not None and node.score >= relevancy_score_threshold:
+        #     relevancy_results.append("yes")
+        #     # logger.debug(f"Document with score {node.score} automatically marked as relevant")
+        # else:
+        #     # Only use LLM evaluation for documents below the threshold
+        #     llm: LLM = await ctx.get("llm")
+        #     relevancy = await llm.acomplete(
+        #         prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
+        #             context_str=node.text, metadata=node.metadata, query_str=query_str
+        #         )
+        #     )
+        #     # logger.debug(relevancy)
+        #     # relevancy_results.append(relevancy.message.content.lower().strip())
+        #     # relevancy_results.append(relevancy)
+        #     relevancy_results.append(relevancy.text.lower().strip())
+        #     # logger.debug(relevancy_results)
+
+        # WARN this runs async
+        tasks = [evaluate_node_relevance(node) for node in retrieved_nodes]
+        relevancy_results = await asyncio.gather(*tasks)
+
+        logger.debug(relevancy_results)
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
 
+        await ctx.set("relevancy_score", relevancy_count / len(relevancy_results))
         await ctx.set("relevancy_results", relevancy_results)
         return RelevanceEvalEvent(relevant_results=relevancy_results)
 
@@ -291,27 +315,28 @@ class MindfulRAGWorkflow(Workflow):
         relevant_texts = [retrieved_nodes[i].text for i, result in enumerate(relevancy_results) if result == "yes"]
 
         result = "\n".join(relevant_texts)
-        # ic("extract_relevant_texts step", result)
         return TextExtractEvent(relevant_text=result)
 
     @step(pass_context=True)
     async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
         """Search the transformed query with SearXNG."""
         relevant_text = ev.relevant_text
-        relevancy_results = await ctx.get("relevancy_results")
+        # relevancy_results = await ctx.get("relevancy_results")
         query_str = await ctx.get("query_str")
-        relevancy_count = sum(1 for r in relevancy_results if r == "yes")
+        relevancy_score = await ctx.get("relevancy_score")
         # If any document is found irrelevant, transform the query string for better search results.
         # if "no" in relevancy_results:
-        if relevancy_count / len(relevancy_results) < 0.5:
+        if relevancy_score < 0.5:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
-            transformed_query_str = llm.complete(prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=query_str))
-            # logger.debug(f"Transformed query string: {transformed_query_str}")
+            transformed_query_str = await llm.acomplete(
+                prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=query_str)
+            )
+            logger.debug(f"Transformed query string: {transformed_query_str}")
 
             # Conduct a search with the transformed query string and collect the results.
             searxng: SearXNGClient = await ctx.get("searxng")
-            searxng_results = searxng.get_content_for_llm(query=transformed_query_str.text, max_results=10)
+            searxng_results = await searxng.get_content_for_llm(query=transformed_query_str.text, max_results=10)
 
             search_text = "\n".join([result.content for result in searxng_results])
         else:
@@ -328,25 +353,32 @@ class MindfulRAGWorkflow(Workflow):
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
         context_titles = await ctx.get("context_titles")
-        relevancy_results = await ctx.get("relevancy_results")
+        # relevancy_results = await ctx.get("relevancy_results")
+        relevancy_score = await ctx.get("relevancy_score")
 
         # Determine the status of the RAG process based on the relevancy results
-        if all(result == "yes" for result in relevancy_results):
+        if relevancy_score > 0.5:
             status = "correct"
-        elif not relevant_text and search_text:
+        elif relevancy_score == 0.0:
             status = "incorrect"
         else:
             status = "ambiguous"
+        # if all(result == "yes" for result in relevancy_results):
+        #     status = "correct"
+        # elif not relevant_text and search_text:
+        #     status = "incorrect"
+        # else:
+        #     status = "ambiguous"
 
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        long_answer = llm.complete(
+        long_answer = await llm.acomplete(
             prompt=PREDICT_LONG_ANSWER.format(
                 titles=context_titles, question=query_str, context=context_with_attribution
             ),
         )
-        short_answer = llm.complete(
+        short_answer = await llm.acomplete(
             prompt=EXTRACT_ANSWER.format(long_answer=long_answer.text, question=query_str),
         )
 

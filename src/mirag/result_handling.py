@@ -82,11 +82,18 @@ class ResultHandler:
         else:
             logger.warning("No items were successfully processed")
 
+        # Configuration information
+        config_info = {
+            "llm": args.llm,
+            "embed_model": args.embed_model,
+        }
+
         # Write summary to file
         with open(f"summary_{args.output_file}", "w") as f:
             f.write(
                 json.dumps(
                     {
+                        "configuration": config_info,
                         "dataset_size": dataset_size,
                         "processed_items": successful_items,
                         "context_size": sum(context_sizes) / len(context_sizes) if context_sizes else None,

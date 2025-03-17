@@ -12,7 +12,7 @@ from llama_index.llms.openai import OpenAI
 from loguru import logger
 from tqdm.asyncio import tqdm
 
-from mirag.api import run_api
+from api.main import run_api
 from mirag.cli import CLI
 from mirag.data_processing import DataProcessor
 from mirag.index_management import IndexManager
@@ -33,6 +33,7 @@ async def main():
         logger.enable("mirag.workflows")
 
     searxng = SearXNGClient(instance_url="http://localhost:8080")
+    await searxng._test_connection()
 
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=args.embed_model,
@@ -162,6 +163,7 @@ async def main():
                     failed_items.append(item)
 
     output_file.close()
+    await searxng.close()
     with open(args.output_file, "w") as f:
         for result in results:
             json_string = json.dumps(result)

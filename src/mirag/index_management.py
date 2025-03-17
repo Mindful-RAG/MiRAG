@@ -1,6 +1,7 @@
 import os
 import traceback
 
+import chromadb
 from loguru import logger
 
 from mirag.constants import (
@@ -15,6 +16,7 @@ class IndexManager:
         self.persist_path = persist_path
         self.wf = wf
         self.llm = llm
+        self.chroma_client = chromadb.PersistentClient(path=self.persist_path)
 
     async def load_or_create_index(self, args, dataset=None):
         """Load an existing index or create a new one based on arguments"""
@@ -40,6 +42,7 @@ class IndexManager:
                     chunk_size=DEFAULT_CHUNK_SIZE,
                     similarity_top_k=DEFAULT_TOP_K,
                     small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
+                    index_kwargs={"use_async": True},
                 )
                 logger.info("Successfully loaded index from disk")
 
