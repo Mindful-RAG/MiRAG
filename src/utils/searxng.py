@@ -1,7 +1,7 @@
-import time
+import asyncio
 from typing import Any, Dict, List, NamedTuple, Optional
 
-import requests
+import aiohttp
 from loguru import logger
 
 
@@ -34,23 +34,33 @@ class SearXNGClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.retry_delay = retry_delay
+        self._session = None
 
-        # Test connection
-        self._test_connection()
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp client session."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
-    def _test_connection(self) -> None:
+    async def close(self) -> None:
+        """Close the aiohttp session."""
+        if self._session and not self._session.closed:
+            await self._session.close()
+
+    async def _test_connection(self) -> None:
         """Test the connection to the SearXNG instance."""
         try:
-            response = requests.get(self.instance_url, timeout=self.timeout)
-            if response.status_code == 200:
-                logger.info(f"Successfully connected to SearXNG instance at {self.instance_url}")
-            else:
-                logger.warning(f"SearXNG instance returned status code {response.status_code}")
-        except requests.exceptions.RequestException as e:
+            session = await self._get_session()
+            async with session.get(self.instance_url, timeout=self.timeout) as response:
+                if response.status == 200:
+                    logger.info(f"Successfully connected to SearXNG instance at {self.instance_url}")
+                else:
+                    logger.warning(f"SearXNG instance returned status code {response.status}")
+        except aiohttp.ClientError as e:
             logger.error(f"Failed to connect to SearXNG instance: {e}")
             logger.error("Make sure SearXNG is running at the specified URL")
 
-    def search(
+    async def search(
         self,
         query: str,
         max_results: int = 10,
@@ -98,30 +108,32 @@ class SearXNGClient:
         }
 
         # Try the request with retries
+        session = await self._get_session()
         for attempt in range(self.max_retries):
             try:
-                response = requests.get(self.search_url, params=params, headers=headers, timeout=self.timeout)
+                async with session.get(
+                    self.search_url, params=params, headers=headers, timeout=self.timeout
+                ) as response:
+                    if response.status == 200:
+                        results = await response.json()
+                        # Limit the number of results
+                        if "results" in results:
+                            results["results"] = results["results"][:max_results]
+                        return results
+                    else:
+                        logger.warning(f"Attempt {attempt + 1}/{self.max_retries}: Error {response.status}")
 
-                if response.status_code == 200:
-                    results = response.json()
-                    # Limit the number of results
-                    if "results" in results:
-                        results["results"] = results["results"][:max_results]
-                    return results
-                else:
-                    logger.warning(f"Attempt {attempt + 1}/{self.max_retries}: Error {response.status_code}")
-
-            except requests.exceptions.RequestException as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 logger.warning(f"Attempt {attempt + 1}/{self.max_retries}: Request failed - {e}")
 
             # Don't sleep after the last attempt
             if attempt < self.max_retries - 1:
-                time.sleep(self.retry_delay)
+                await asyncio.sleep(self.retry_delay)
 
         logger.error(f"Failed to get search results after {self.max_retries} attempts")
         return None
 
-    def get_content_for_llm(self, query: str, max_results: int = 5) -> List[Document]:
+    async def get_content_for_llm(self, query: str, max_results: int = 5) -> List[Document]:
         """
         Get search results as a list of Document objects for LLM consumption.
 
@@ -132,7 +144,7 @@ class SearXNGClient:
         Returns:
             List of Document objects with search results
         """
-        results = self.search(query, max_results=max_results)
+        results = await self.search(query, max_results=max_results)
         documents = []
 
         if not results or "results" not in results or not results["results"]:
@@ -177,7 +189,7 @@ class SearXNGClient:
 
         return "\n\n".join(formatted_results)
 
-    def fetch_knowledge(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+    async def fetch_knowledge(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
         """
         Fetch knowledge structured for LLM input as dictionaries.
 
@@ -188,7 +200,7 @@ class SearXNGClient:
         Returns:
             List of dictionaries with structured content
         """
-        results = self.search(query, max_results=max_results)
+        results = await self.search(query, max_results=max_results)
 
         if not results or "results" not in results:
             return []
@@ -215,11 +227,11 @@ class SearXNGClient:
         return knowledge_items
 
 
-def search_searxng(
+async def search_searxng(
     query: str, instance_url: str = "http://localhost:8080", max_results: int = 10
 ) -> Optional[Dict[str, Any]]:
     """
-    Simple function to search SearXNG instance.
+    Simple async function to search SearXNG instance.
 
     Args:
         query: The search query
@@ -230,10 +242,13 @@ def search_searxng(
         JSON response containing search results
     """
     client = SearXNGClient(instance_url)
-    return client.search(query, max_results=max_results)
+    try:
+        return await client.search(query, max_results=max_results)
+    finally:
+        await client.close()
 
 
-def get_search_results_for_llm(
+async def get_search_results_for_llm(
     query: str, max_results: int = 5, instance_url: str = "http://localhost:8080"
 ) -> List[Document]:
     """
@@ -248,15 +263,18 @@ def get_search_results_for_llm(
         List of Document objects with search results
     """
     client = SearXNGClient(instance_url)
-    return client.get_content_for_llm(query, max_results=max_results)
+    try:
+        return await client.get_content_for_llm(query, max_results=max_results)
+    finally:
+        await client.close()
 
 
-if __name__ == "__main__":
+async def main():
     # Example: Get content formatted for an LLM
     query = 'What does "HP" stand for in War and Order?'
 
     # Method 1: Using the convenience function
-    documents = get_search_results_for_llm(query, max_results=5)
+    documents = await get_search_results_for_llm(query, max_results=5)
     for doc in documents:
         print(f"Title: {doc.title}")
         print(f"URL: {doc.url}")
@@ -268,9 +286,17 @@ if __name__ == "__main__":
 
     # Method 2: Using the client directly
     client = SearXNGClient()
-    documents = client.get_content_for_llm(query, max_results=5)
-    print(documents)
+    try:
+        await client._test_connection()
+        documents = await client.get_content_for_llm(query, max_results=5)
+        print(documents)
 
-    # Format the documents into text
-    formatted_text = client.format_results_as_text(documents)
-    print(formatted_text)
+        # Format the documents into text
+        formatted_text = client.format_results_as_text(documents)
+        print(formatted_text)
+    finally:
+        await client.close()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
