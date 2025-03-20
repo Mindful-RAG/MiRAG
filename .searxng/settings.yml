@@ -15,7 +15,7 @@ general:
   # expose stats in open metrics format at /metrics
   # leave empty to disable (no password set)
   # open_metrics: <password>
-  open_metrics: ''
+  open_metrics: ""
 
 brand:
   new_issue_url: https://github.com/searxng/searxng/issues/new
@@ -85,7 +85,7 @@ server:
   bind_address: "127.0.0.1"
   # public URL of the instance, to ensure correct inbound links. Is overwritten
   # by ${SEARXNG_URL}.
-  base_url: http://localhost:8080/  # "http://example.com/location"
+  base_url: false # "http://example.com/location"
   # rate limit the number of request on the instance, block some bots.
   # Is overwritten by ${SEARXNG_LIMITER}
   limiter: false
@@ -96,7 +96,7 @@ server:
   # If your instance owns a /etc/searxng/settings.yml file, then set the following
   # values there.
 
-  secret_key: "f929e76dbb5de37da2ca9ac886313dd5321abc4629e9c4775a3b65040cf4b75c"  # Is overwritten by ${SEARXNG_SECRET}
+  secret_key: "f929e76dbb5de37da2ca9ac886313dd5321abc4629e9c4775a3b65040cf4b75c" # Is overwritten by ${SEARXNG_SECRET}
   # Proxy image results through SearXNG. Is overwritten by ${SEARXNG_IMAGE_PROXY}
   image_proxy: false
   # 1.0 and 1.1 are supported
@@ -302,17 +302,17 @@ checker:
         lang: en
       result_container:
         - not_empty
-        - ['one_title_contains', 'citizen kane']
+        - ["one_title_contains", "citizen kane"]
       test:
         - unique_results
 
     android: &test_android
       matrix:
-        query: ['android']
-        lang: ['en', 'de', 'fr', 'zh-CN']
+        query: ["android"]
+        lang: ["en", "de", "fr", "zh-CN"]
       result_container:
         - not_empty
-        - ['one_title_contains', 'google']
+        - ["one_title_contains", "google"]
       test:
         - unique_results
 
@@ -364,7 +364,8 @@ engines:
     categories: ["images"]
     # https://docs.searxng.org/dev/engines/online/adobe_stock.html
     adobe_order: relevance
-    adobe_content_types: ["photo", "illustration", "zip_vector", "template", "3d", "image"]
+    adobe_content_types:
+      ["photo", "illustration", "zip_vector", "template", "3d", "image"]
     timeout: 6
     disabled: true
 
@@ -503,8 +504,24 @@ engines:
     categories: music
 
   - name: baidu
+    baidu_category: general
+    categories: [general]
     engine: baidu
-    shortcut: baidu
+    shortcut: bd
+    disabled: true
+
+  - name: baidu images
+    baidu_category: images
+    categories: [images]
+    engine: baidu
+    shortcut: bdi
+    disabled: true
+
+  - name: baidu kaifa
+    baidu_category: it
+    categories: [it]
+    engine: baidu
+    shortcut: bdk
     disabled: true
 
   - name: wikipedia
@@ -606,12 +623,12 @@ engines:
     engine: cloudflareai
     shortcut: cfai
     # get api token and accont id from https://developers.cloudflare.com/workers-ai/get-started/rest-api/
-    cf_account_id: 'your_cf_accout_id'
-    cf_ai_api: 'your_cf_api'
+    cf_account_id: "your_cf_accout_id"
+    cf_ai_api: "your_cf_api"
     # create your ai gateway by https://developers.cloudflare.com/ai-gateway/get-started/creating-gateway/
-    cf_ai_gateway: 'your_cf_ai_gateway_name'
+    cf_ai_gateway: "your_cf_ai_gateway_name"
     # find the model name from https://developers.cloudflare.com/workers-ai/models/#text-generation
-    cf_ai_model: 'ai_model_name'
+    cf_ai_model: "ai_model_name"
     # custom your preferences
     # cf_ai_model_display_name: 'Cloudflare AI'
     # cf_ai_model_assistant: 'prompts_for_assistant_role'
@@ -682,7 +699,7 @@ engines:
     categories: general
     disabled: true
     paging: true
-    lang_all: ''
+    lang_all: ""
     search_url: https://curlie.org/search?q={query}&lang={lang}&start={pageno}&stime=92452189
     page_size: 20
     results_xpath: //div[@id="site-list-content"]/div[@class="site-item"]
@@ -774,17 +791,18 @@ engines:
       results: HTML
 
   # - name: elasticsearch
-  #   shortcut: es
+  #   shortcut: els
   #   engine: elasticsearch
   #   base_url: http://localhost:9200
   #   username: elastic
   #   password: changeme
   #   index: my-index
+  #   enable_http: true
   #   # available options: match, simple_query_string, term, terms, custom
   #   query_type: match
   #   # if query_type is set to custom, provide your query here
-  #   #custom_query_json: {"query":{"match_all": {}}}
-  #   #show_metadata: false
+  #   # custom_query_json: {"query":{"match_all": {}}}
+  #   # show_metadata: false
   #   disabled: true
 
   - name: wikidata
@@ -1741,6 +1759,12 @@ engines:
     about:
       website: https://searchmysite.net
 
+  - name: selfhst icons
+    engine: selfhst
+    shortcut: si
+    inactive: true
+    disabled: true
+
   - name: sepiasearch
     engine: sepiasearch
     shortcut: sep
@@ -1772,32 +1796,32 @@ engines:
   - name: stackoverflow
     engine: stackexchange
     shortcut: st
-    api_site: 'stackoverflow'
+    api_site: "stackoverflow"
     categories: [it, q&a]
 
   - name: askubuntu
     engine: stackexchange
     shortcut: ubuntu
-    api_site: 'askubuntu'
+    api_site: "askubuntu"
     categories: [it, q&a]
 
   - name: superuser
     engine: stackexchange
     shortcut: su
-    api_site: 'superuser'
+    api_site: "superuser"
     categories: [it, q&a]
 
   - name: discuss.python
     engine: discourse
     shortcut: dpy
-    base_url: 'https://discuss.python.org'
+    base_url: "https://discuss.python.org"
     categories: [it, q&a]
     disabled: true
 
   - name: caddy.community
     engine: discourse
     shortcut: caddy
-    base_url: 'https://caddy.community'
+    base_url: "https://caddy.community"
     categories: [it, q&a]
     disabled: true
 
@@ -1805,7 +1829,7 @@ engines:
     engine: discourse
     shortcut: pi
     categories: [it, q&a]
-    base_url: 'https://discourse.pi-hole.net'
+    base_url: "https://discourse.pi-hole.net"
     disabled: true
 
   - name: searchcode code
@@ -1889,15 +1913,15 @@ engines:
   # For this demo of the sqlite engine download:
   #   https://liste.mediathekview.de/filmliste-v2.db.bz2
   # and unpack into searx/data/filmliste-v2.db
-  # Query to test: "!demo concert"
+  # Query to test: "!mediathekview concert"
   #
-  # - name: demo
+  # - name: mediathekview
   #   engine: sqlite
-  #   shortcut: demo
-  #   categories: general
-  #   result_template: default.html
+  #   shortcut: mediathekview
+  #   categories: [general, videos]
+  #   result_type: MainResult
   #   database: searx/data/filmliste-v2.db
-  #   query_str:  >-
+  #   query_str: >-
   #     SELECT title || ' (' || time(duration, 'unixepoch') || ')' AS title,
   #            COALESCE( NULLIF(url_video_hd,''), NULLIF(url_video_sd,''), url_video) AS url,
   #            description AS content
@@ -1930,8 +1954,7 @@ engines:
   - name: torch
     engine: xpath
     paging: true
-    search_url:
-      http://xmh57jrknzkhv6y3ls3ubitzfqnkrwxhopf5aygthi7d6rplyvk3noyd.onion/cgi-bin/omega/omega?P={query}&DEFAULTOP=and
+    search_url: http://xmh57jrknzkhv6y3ls3ubitzfqnkrwxhopf5aygthi7d6rplyvk3noyd.onion/cgi-bin/omega/omega?P={query}&DEFAULTOP=and
     results_xpath: //table//tr
     url_xpath: ./td[2]/a
     title_xpath: ./td[2]/b
@@ -2101,7 +2124,7 @@ engines:
           lang: en
         result_container:
           - not_empty
-          - ['one_title_contains', 'Tardigrada']
+          - ["one_title_contains", "Tardigrada"]
         test:
           - unique_results
 
@@ -2338,7 +2361,7 @@ engines:
     disabled: true
     # if you aren't using HTTPS for your local yacy instance disable https
     # enable_http: false
-    search_mode: 'global'
+    search_mode: "global"
     # timeout can be reduced in 'local' search mode
     timeout: 5.0
 
@@ -2386,7 +2409,7 @@ engines:
     no_result_for_http_status: [404]
     about:
       website: https://www.woxikon.de/
-      wikidata_id:  # No Wikidata ID
+      wikidata_id: # No Wikidata ID
       use_official_api: false
       require_api_key: false
       results: HTML
@@ -2643,11 +2666,11 @@ engines:
 #        keys: ['line']
 
 doi_resolvers:
-  oadoi.org: 'https://oadoi.org/'
-  doi.org: 'https://doi.org/'
-  doai.io: 'https://dissem.in/'
-  sci-hub.se: 'https://sci-hub.se/'
-  sci-hub.st: 'https://sci-hub.st/'
-  sci-hub.ru: 'https://sci-hub.ru/'
+  oadoi.org: "https://oadoi.org/"
+  doi.org: "https://doi.org/"
+  doai.io: "https://dissem.in/"
+  sci-hub.se: "https://sci-hub.se/"
+  sci-hub.st: "https://sci-hub.st/"
+  sci-hub.ru: "https://sci-hub.ru/"
 
-default_doi_resolver: 'oadoi.org'
+default_doi_resolver: "oadoi.org"

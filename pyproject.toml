@@ -45,6 +45,7 @@ dependencies = [
     "python-jose>=3.4.0",
     "passlib>=1.7.4",
     "pydantic[email]>=2.10.6",
+    "llama-index-vector-stores-pinecone>=0.4.5",
 ]
 
 [dependency-groups]
