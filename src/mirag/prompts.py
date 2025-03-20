@@ -38,7 +38,7 @@ DEFAULT_TRANSFORM_QUERY_TEMPLATE = PromptTemplate(
     """
 )
 
-PREDICT_LONG_ANSWER = PromptTemplate(
+PREDICT_LONG_ANSWER_NQ = PromptTemplate(
     template="""\
     Go through the following context and then extract the answer of the question from the context.
     Answer the question directly. Your answer should be concise.
@@ -50,6 +50,20 @@ PREDICT_LONG_ANSWER = PromptTemplate(
 
     The context is: {context}.
     The question: {question}.\
+    """
+)
+PREDICT_LONG_ANSWER_QA = PromptTemplate(
+    template="""\
+    Go through the following context and then answer the question
+
+    The context is a list of Wikipedia documents titled: {titles}.
+
+    There are two types of questions: comparison questions, which require a yes or no answer or a selection from two candidates,
+    and general questions, which demand a concise response.
+    The context is: {context}.
+    Find the useful documents from the context, then answer the question: {question}.
+    For general questions, you should use the exact words from the context as the answer to avoid ambiguity.
+    Answer the question directly and don't output other thing.\
     """
 )
 

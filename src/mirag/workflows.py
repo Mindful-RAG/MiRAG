@@ -1,9 +1,10 @@
 import asyncio
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
+from authlib.integrations.base_client.sync_openid import jwt
 from dotenv import load_dotenv
 from llama_index.core import Document, VectorStoreIndex
-from llama_index.core.llms import LLM
+from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.schema import BaseNode, TextNode
@@ -24,7 +25,8 @@ from mirag.prompts import (
     DEFAULT_RELEVANCY_PROMPT_TEMPLATE,
     DEFAULT_TRANSFORM_QUERY_TEMPLATE,
     EXTRACT_ANSWER,
-    PREDICT_LONG_ANSWER,
+    PREDICT_LONG_ANSWER_NQ,
+    PREDICT_LONG_ANSWER_QA,
 )
 from utils.searxng import SearXNGClient
 
@@ -133,7 +135,7 @@ class MindfulRAGWorkflow(Workflow):
             return None
         if not index:
             # docs = StringIterableReader().load_data(texts=dataset)
-            docs = hf_dataset_to_documents(dataset=dataset, text_field="context", metadata_fields=["context_titles"])
+            docs = hf_dataset_to_documents(dataset=dataset, text_field="context")
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -203,6 +205,7 @@ class MindfulRAGWorkflow(Workflow):
         retriever_kwargs: dict | None = ev.get("retriever_kwargs", {})
         llm: LLM = ev.get("llm")
         searxng: SearXNGClient = ev.get("searxng")
+        data_name: str = ev.get("data_name")
 
         if query_str is None:
             return None
@@ -212,6 +215,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("llm", llm)
         await ctx.set("index", index)
         await ctx.set("searxng", searxng)
+        await ctx.set("data_name", data_name)
 
         await ctx.set("query_str", query_str)
         await ctx.set("context_titles", context_titles)
@@ -272,28 +276,6 @@ class MindfulRAGWorkflow(Workflow):
                     # relevancy_results.append(relevancy.text.lower().strip())
                     return relevancy.text.lower().strip()
 
-        # tasks = []
-        # for node in retrieved_nodes:
-        #     task = asyncio.create_task(get_relevancy(node))
-        #     tasks.append(task)
-        # Automatically consider documents with high similarity scores as relevant
-        # if hasattr(node, "score") and node.score is not None and node.score >= relevancy_score_threshold:
-        #     relevancy_results.append("yes")
-        #     # logger.debug(f"Document with score {node.score} automatically marked as relevant")
-        # else:
-        #     # Only use LLM evaluation for documents below the threshold
-        #     llm: LLM = await ctx.get("llm")
-        #     relevancy = await llm.acomplete(
-        #         prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
-        #             context_str=node.text, metadata=node.metadata, query_str=query_str
-        #         )
-        #     )
-        #     # logger.debug(relevancy)
-        #     # relevancy_results.append(relevancy.message.content.lower().strip())
-        #     # relevancy_results.append(relevancy)
-        #     relevancy_results.append(relevancy.text.lower().strip())
-        #     # logger.debug(relevancy_results)
-
         # WARN this runs async
         tasks = [evaluate_node_relevance(node) for node in retrieved_nodes]
         relevancy_results = await asyncio.gather(*tasks)
@@ -353,8 +335,8 @@ class MindfulRAGWorkflow(Workflow):
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
         context_titles = await ctx.get("context_titles")
-        # relevancy_results = await ctx.get("relevancy_results")
         relevancy_score = await ctx.get("relevancy_score")
+        data_name = await ctx.get("data_name")
 
         # Determine the status of the RAG process based on the relevancy results
         if relevancy_score > 0.5:
@@ -363,28 +345,33 @@ class MindfulRAGWorkflow(Workflow):
             status = "incorrect"
         else:
             status = "ambiguous"
-        # if all(result == "yes" for result in relevancy_results):
-        #     status = "correct"
-        # elif not relevant_text and search_text:
-        #     status = "incorrect"
-        # else:
-        #     status = "ambiguous"
 
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        long_answer = await llm.acomplete(
-            prompt=PREDICT_LONG_ANSWER.format(
-                titles=context_titles, question=query_str, context=context_with_attribution
-            ),
-        )
+        long_answer = ""
+        if data_name == "nq":
+            long_answer_completion = await llm.acomplete(
+                prompt=PREDICT_LONG_ANSWER_NQ.format(
+                    titles=context_titles, question=query_str, context=context_with_attribution
+                ),
+            )
+            long_answer = long_answer_completion.text
+        if data_name == "hotpot_qa":
+            long_answer_completion = await llm.acomplete(
+                prompt=PREDICT_LONG_ANSWER_QA.format(
+                    titles=context_titles, question=query_str, context=context_with_attribution
+                ),
+            )
+            long_answer = long_answer_completion.text
+
         short_answer = await llm.acomplete(
-            prompt=EXTRACT_ANSWER.format(long_answer=long_answer.text, question=query_str),
+            prompt=EXTRACT_ANSWER.format(long_answer=long_answer, question=query_str),
         )
 
         return StopEvent(
             result={
-                "long_answer": long_answer.text,
+                "long_answer": long_answer,
                 "short_answer": short_answer.text,
                 "status": status,
             }

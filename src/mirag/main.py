@@ -1,3 +1,4 @@
+import os
 import json
 import time
 import traceback
@@ -32,7 +33,7 @@ async def main():
     if args.debug:
         logger.enable("mirag.workflows")
 
-    searxng = SearXNGClient(instance_url="http://localhost:8080")
+    searxng = SearXNGClient(instance_url=os.environ.get("SEARXNG_URL", "http://localhost:8003"))
     await searxng._test_connection()
 
     Settings.embed_model = HuggingFaceEmbedding(
@@ -50,12 +51,12 @@ async def main():
         llm = Gemini(model=f"models/{args.llm}")
         Settings.llm = llm
 
-    wf = MindfulRAGWorkflow(timeout=60)
+    wf = MindfulRAGWorkflow(timeout=None)
     logger.info("loading dataset")
-    dataset = load_dataset("TIGER-LAB/LongRAG", "nq", split=args.split, trust_remote_code=True, num_proc=8)
+    dataset = load_dataset("TIGER-LAB/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
 
     logger.info("loading index")
-    index_manager = IndexManager(args.persist_path, wf, llm)
+    index_manager = IndexManager(f"{args.persist_path}-{args.data_name}", wf, llm)
     index = await index_manager.load_or_create_index(args, dataset)
 
     # Initialize data processor

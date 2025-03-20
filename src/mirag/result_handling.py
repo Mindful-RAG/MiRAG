@@ -83,10 +83,7 @@ class ResultHandler:
             logger.warning("No items were successfully processed")
 
         # Configuration information
-        config_info = {
-            "llm": args.llm,
-            "embed_model": args.embed_model,
-        }
+        config_info = {"llm": args.llm, "embed_model": args.embed_model, "data_name": args.data_name}
 
         # Write summary to file
         with open(f"summary_{args.output_file}", "w") as f:

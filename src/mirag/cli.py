@@ -62,6 +62,7 @@ class CLI:
             action="store_true",
             help="Load index from disk instead of creating a new one",
         )
+        cli_parser.add_argument("--data_name", type=str, default="nq", help="Benchmark name")
         cli_parser.add_argument(
             "--debug",
             action="store_true",

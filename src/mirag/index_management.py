@@ -1,8 +1,14 @@
 import os
+from llama_index.core.vector_stores.simple import SimpleVectorStore
+from llama_index.vector_stores.chroma import ChromaVectorStore
 import traceback
-
+from chromadb.config import Settings
 import chromadb
+from llama_index.core import Document, VectorStoreIndex
+from llama_index.core.storage import StorageContext
 from loguru import logger
+from dotenv import load_dotenv
+from pinecone.control.types.create_index_for_model_embed import Metric
 
 from mirag.constants import (
     DEFAULT_CHUNK_SIZE,
@@ -10,13 +16,16 @@ from mirag.constants import (
     DEFAULT_TOP_K,
 )
 
+load_dotenv()
+
 
 class IndexManager:
     def __init__(self, persist_path, wf, llm):
         self.persist_path = persist_path
         self.wf = wf
         self.llm = llm
-        self.chroma_client = chromadb.PersistentClient(path=self.persist_path)
+        self.collection_name = "mirag-collection"
+        self.db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
 
     async def load_or_create_index(self, args, dataset=None):
         """Load an existing index or create a new one based on arguments"""
@@ -27,11 +36,17 @@ class IndexManager:
             logger.info(f"Loading index from {self.persist_path}")
             try:
                 from llama_index.core import load_index_from_storage
-                from llama_index.core.storage import StorageContext
+
+                chroma_collection = self.db.get_collection(self.collection_name)
+                vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+
+                storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)
+
+                loaded_index = load_index_from_storage(storage_context)
 
                 # Load the index from disk
-                storage_context = StorageContext.from_defaults(persist_dir=self.persist_path)
-                loaded_index = load_index_from_storage(storage_context)
+                # storage_context = StorageContext.from_defaults(persist_dir=self.persist_path)
+                # loaded_index = load_index_from_storage(storage_context)
 
                 # Run a minimal workflow step to get the index in the right format
                 # We just need to convert the loaded index into the format expected by the workflow
@@ -55,12 +70,26 @@ class IndexManager:
         # Create index if it wasn't loaded and dataset is provided
         if index is None and dataset is not None:
             logger.info("Creating new index")
+
+            try:
+                self.db.delete_collection(self.collection_name)
+            except:
+                pass
+
+            chroma_collection = self.db.create_collection(self.collection_name)
+            vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+
+            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+
+            index_kwargs = {"use_async": True, "storage_context": storage_context, "show_progress": True}
+
             index = await self.wf.run(
                 dataset=dataset,
                 llm=self.llm,
                 chunk_size=DEFAULT_CHUNK_SIZE,
                 similarity_top_k=DEFAULT_TOP_K,
                 small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
+                index_kwargs=index_kwargs,
             )
 
             # Persist the index if requested
