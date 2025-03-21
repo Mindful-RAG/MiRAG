@@ -1,11 +1,18 @@
 from pydantic import BaseModel
 
 
-class QueryRequest(BaseModel):
+class QueryIn(BaseModel):
     query: str
 
 
-class QueryResponse(BaseModel):
+class LongragOut(BaseModel):
+    query: str
+    short_answer: str
+    long_answer: str
+    markdown: str
+
+
+class MiragOut(BaseModel):
     query: str
     short_answer: str
     long_answer: str
