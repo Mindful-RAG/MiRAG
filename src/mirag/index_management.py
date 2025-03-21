@@ -38,6 +38,7 @@ class IndexManager:
                 from llama_index.core import load_index_from_storage
 
                 chroma_collection = self.db.get_collection(self.collection_name)
+                logger.debug(chroma_collection.count())
                 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
                 storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)

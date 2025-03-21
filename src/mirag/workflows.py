@@ -17,7 +17,7 @@ from llama_index.core.workflow import (
 )
 from loguru import logger
 
-from mirag.constants import DEFAULT_MAX_GROUP_SIZE
+from mirag.constants import DEFAULT_MAX_GROUP_SIZE, DEFAULT_TOP_K
 from mirag.events import LoadNodeEvent, PrepEvent, QueryEvent, RelevanceEvalEvent, RetrieveEvent, TextExtractEvent
 from mirag.hf_document import hf_dataset_to_documents
 from mirag.longrag_retriever import LongRAGRetriever
@@ -135,7 +135,7 @@ class MindfulRAGWorkflow(Workflow):
             return None
         if not index:
             # docs = StringIterableReader().load_data(texts=dataset)
-            docs = hf_dataset_to_documents(dataset=dataset, text_field="context")
+            docs = hf_dataset_to_documents(dataset=dataset, text_field="context", metadata_fields=["type"])
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -196,6 +196,46 @@ class MindfulRAGWorkflow(Workflow):
             }
         )
 
+    @step
+    async def longrag_query(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """Query step.
+
+        Args:
+            ctx (Context): context
+            ev (StartEvent): start event
+
+        Returns:
+            StopEvent | None: stop event with result
+        """
+        llm: LLM = ev.get("long_llm")
+        query_str: str | None = ev.get("long_query_str")
+        index: VectorStoreIndex = ev.get("long_index")
+        context_titles = ev.get("context_titles")
+        context = ev.get("context")
+
+        if query_str is None:
+            return None
+
+        # query_engine = index.as_query_engine()
+        # result = query_engine.query(query_str)
+
+        long_answer = await llm.acomplete(
+            prompt=PREDICT_LONG_ANSWER_NQ.format(titles=context_titles, question=query_str, context=context),
+        )
+        # short_answer = await llm.acomplete(
+        #     prompt=EXTRACT_ANSWER.format(long_answer=str(result), question=query_str),
+        # )
+        short_answer = await llm.acomplete(
+            prompt=EXTRACT_ANSWER.format(long_answer=long_answer.text, question=query_str),
+        )
+
+        return StopEvent(
+            result={
+                "long_answer": long_answer.text,
+                "short_answer": short_answer.text,
+            }
+        )
+
     @step(pass_context=True)
     async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
         """Prepare for retrieval."""
@@ -243,7 +283,7 @@ class MindfulRAGWorkflow(Workflow):
         # getretrieve = retrieve.retrieve(query_str)
         # logger.debug(getretrieve)
         # retriever = index.as_retriever(**retriever_kwargs)
-        retriever = index.as_retriever(similarity_top_k=8)
+        retriever = index.as_retriever(similarity_top_k=DEFAULT_TOP_K)
         # result = retrieve.retrieve(query_str)
         result = retriever.retrieve(query_str)
 
@@ -350,16 +390,16 @@ class MindfulRAGWorkflow(Workflow):
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
         long_answer = ""
-        if data_name == "nq":
+        if data_name == "hotpot_qa":
             long_answer_completion = await llm.acomplete(
-                prompt=PREDICT_LONG_ANSWER_NQ.format(
+                prompt=PREDICT_LONG_ANSWER_QA.format(
                     titles=context_titles, question=query_str, context=context_with_attribution
                 ),
             )
             long_answer = long_answer_completion.text
-        if data_name == "hotpot_qa":
+        else:
             long_answer_completion = await llm.acomplete(
-                prompt=PREDICT_LONG_ANSWER_QA.format(
+                prompt=PREDICT_LONG_ANSWER_NQ.format(
                     titles=context_titles, question=query_str, context=context_with_attribution
                 ),
             )

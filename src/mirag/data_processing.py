@@ -7,11 +7,12 @@ from tqdm.asyncio import tqdm
 
 
 class DataProcessor:
-    def __init__(self, wf, index, llm, searxng):
+    def __init__(self, wf, index, llm, searxng, args):
         self.wf = wf
         self.index = index
         self.llm = llm
         self.searxng = searxng
+        self.args = args
 
     async def process_item(self, item):
         """Process a single dataset item with error handling"""
@@ -24,6 +25,7 @@ class DataProcessor:
             query_str=query,
             context_titles=context_titles,
             llm=self.llm,
+            data_name=self.args.data_name,
             index=self.index["index"],
             searxng=self.searxng,
         )

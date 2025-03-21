@@ -60,7 +60,7 @@ async def main():
     index = await index_manager.load_or_create_index(args, dataset)
 
     # Initialize data processor
-    data_processor = DataProcessor(wf, index, llm, searxng)
+    data_processor = DataProcessor(wf, index, llm, searxng, args)
 
     # Check if we're continuing from a previous file
     if args.continue_from_file or args.process_errors_only:
