@@ -7,6 +7,7 @@ from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
     VectorStoreQuery,
 )
+from loguru import logger
 
 from mirag.constants import DEFAULT_TOP_K
 
@@ -57,12 +58,16 @@ class LongRAGRetriever(BaseRetriever):
         # determine top parents of most similar children (these are long retrieval units)
         top_parents_set: Set[str] = set()
         top_parents: List[NodeWithScore] = []
+        # logger.debug([id_ for id_ in query_res.ids if id_ in self._small_toks_dict])
+        # logger.debug(self._small_toks_dict
         for id_, similarity in zip(query_res.ids, query_res.similarities):
+            # logger.debug(id_)
             cur_node = self._small_toks_dict[id_]
+            # logger.debug(cur_node)
             parent_id = cur_node.ref_doc_id
             if parent_id not in top_parents_set:
                 top_parents_set.add(parent_id)
-                parent_node = self._grouped_nodes_dict[parent_id]
+                parent_node = self._grouped_nodes_dict[parent_id]  # this causes error
                 node_with_score = NodeWithScore(node=parent_node, score=similarity)
                 top_parents.append(node_with_score)
 

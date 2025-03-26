@@ -9,7 +9,10 @@ from llama_index.core.storage import StorageContext
 from loguru import logger
 from dotenv import load_dotenv
 from pinecone.control.types.create_index_for_model_embed import Metric
-
+from llama_index.storage.docstore.redis import RedisDocumentStore
+from llama_index.storage.index_store.redis import RedisIndexStore
+from llama_index.core.storage.docstore import SimpleDocumentStore
+from llama_index.core.storage.index_store import SimpleIndexStore
 from mirag.constants import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_SMALL_CHUNK_SIZE,
@@ -25,7 +28,6 @@ class IndexManager:
         self.wf = wf
         self.llm = llm
         self.collection_name = "mirag-collection"
-        self.db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
 
     async def load_or_create_index(self, args, dataset=None):
         """Load an existing index or create a new one based on arguments"""
@@ -37,11 +39,33 @@ class IndexManager:
             try:
                 from llama_index.core import load_index_from_storage
 
-                chroma_collection = self.db.get_collection(self.collection_name)
-                logger.debug(chroma_collection.count())
-                vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+                # db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
+                # chroma_collection = db.get_collection(self.collection_name)
+                # logger.debug(chroma_collection.count())
+                # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
-                storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)
+                # docstore = RedisDocumentStore.from_host_and_port(
+                #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"
+                # )
+                # index_store = RedisIndexStore.from_host_and_port(
+                #     host=REDIS_HOST,
+                #     port=int(REDIS_PORT),
+                #     namespace="mirag_index",
+                # )
+                # logger.debug(len(docstore.docs))
+                # docstore = SimpleDocumentStore.from_persist_dir(self.persist_path)
+                # index_store = SimpleIndexStore.from_persist_dir(self.persist_path)
+
+                # logger.debug(len(index_store.index_structs()))
+                # logger.debug(list(docstore.docs))
+
+                # storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)
+                storage_context = StorageContext.from_defaults(
+                    # vector_store=vector_store,
+                    # docstore=docstore,
+                    # index_store=index_store,
+                    persist_dir=self.persist_path
+                )
 
                 loaded_index = load_index_from_storage(storage_context)
 
@@ -72,17 +96,36 @@ class IndexManager:
         if index is None and dataset is not None:
             logger.info("Creating new index")
 
-            try:
-                self.db.delete_collection(self.collection_name)
-            except:
-                pass
+            # db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
+            # try:
+            #     db.delete_collection(self.collection_name)
+            # except:
+            #     pass
 
-            chroma_collection = self.db.create_collection(self.collection_name)
-            vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+            # chroma_collection = db.create_collection(self.collection_name)
+            # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
 
-            storage_context = StorageContext.from_defaults(vector_store=vector_store)
+            # docstore = RedisDocumentStore.from_host_and_port(
+            #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"
+            # )
+            # index_store = RedisIndexStore.from_host_and_port(
+            #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"
+            # )
 
-            index_kwargs = {"use_async": True, "storage_context": storage_context, "show_progress": True}
+            # storage_context = StorageContext.from_defaults(
+            #     vector_store=vector_store,
+            #     # docstore=docstore,
+            #     # index_store=index_store,
+            #     docstore=SimpleDocumentStore(),
+            #     index_store=SimpleIndexStore(),
+            # )
+
+            index_kwargs = {
+                "use_async": True,
+                # "storage_context": storage_context,
+                "show_progress": True,
+                "store_nodes_override": True,
+            }
 
             index = await self.wf.run(
                 dataset=dataset,

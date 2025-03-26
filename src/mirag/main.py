@@ -13,7 +13,7 @@ from llama_index.llms.openai import OpenAI
 from loguru import logger
 from tqdm.asyncio import tqdm
 
-from api.main import run_api
+# from api.main import run_api
 from mirag.cli import CLI
 from mirag.data_processing import DataProcessor
 from mirag.index_management import IndexManager
@@ -21,6 +21,7 @@ from mirag.result_handling import ResultHandler
 from mirag.workflows import MindfulRAGWorkflow
 from utils.async_utils import asyncio_run
 from utils.searxng import SearXNGClient
+from mirag.config import env_vars
 
 nest_asyncio.apply()
 
@@ -33,7 +34,7 @@ async def main():
     if args.debug:
         logger.enable("mirag.workflows")
 
-    searxng = SearXNGClient(instance_url=os.environ.get("SEARXNG_URL", "http://localhost:8003"))
+    searxng = SearXNGClient(instance_url=env_vars.SEARXNG_URL)
     await searxng._test_connection()
 
     Settings.embed_model = HuggingFaceEmbedding(
@@ -51,12 +52,12 @@ async def main():
         llm = Gemini(model=f"models/{args.llm}")
         Settings.llm = llm
 
-    wf = MindfulRAGWorkflow(timeout=None)
+    wf = MindfulRAGWorkflow(timeout=None, verbose=True)
     logger.info("loading dataset")
     dataset = load_dataset("TIGER-LAB/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
 
     logger.info("loading index")
-    index_manager = IndexManager(f"{args.persist_path}-{args.data_name}", wf, llm)
+    index_manager = IndexManager(args.persist_path, wf, llm)
     index = await index_manager.load_or_create_index(args, dataset)
 
     # Initialize data processor
@@ -190,15 +191,11 @@ def run():
 
     args = CLI.parse_arguments()
 
-    if args.command == "api":
-        # Run the API server directly with uvicorn
-        run_api(host=args.host, port=args.port, reload=args.reload)
-    else:
-        logger.info("Starting MiRAG execution.")
-        start = time.time()
-        asyncio_run(main())
-        runtime = time.time() - start
-        logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
+    logger.info("Starting MiRAG execution.")
+    start = time.time()
+    asyncio_run(main())
+    runtime = time.time() - start
+    logger.info(f"MiRAG execution finished in {runtime:.2f} seconds.")
 
 
 if __name__ == "__main__":

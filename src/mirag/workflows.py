@@ -8,6 +8,7 @@ from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.schema import BaseNode, TextNode
+from llama_index.core.storage.docstore import DocumentStore, SimpleDocumentStore
 from llama_index.core.workflow import (
     Context,
     StartEvent,
@@ -135,7 +136,9 @@ class MindfulRAGWorkflow(Workflow):
             return None
         if not index:
             # docs = StringIterableReader().load_data(texts=dataset)
-            docs = hf_dataset_to_documents(dataset=dataset, text_field="context", metadata_fields=["type"])
+            docs = hf_dataset_to_documents(
+                dataset=dataset, text_field="context", metadata_fields=["context_titles"]
+            )  # metadata_fields
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -156,8 +159,6 @@ class MindfulRAGWorkflow(Workflow):
             grouped_nodes = get_grouped_docs(small_nodes, None)
             logger.debug("ran in else")
 
-        # logger.debug(grouped_nodes)
-        # logger.debug(small_nodes)
         return LoadNodeEvent(
             small_nodes=small_nodes,
             grouped_nodes=grouped_nodes,
@@ -196,46 +197,6 @@ class MindfulRAGWorkflow(Workflow):
             }
         )
 
-    @step
-    async def longrag_query(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
-        """Query step.
-
-        Args:
-            ctx (Context): context
-            ev (StartEvent): start event
-
-        Returns:
-            StopEvent | None: stop event with result
-        """
-        llm: LLM = ev.get("long_llm")
-        query_str: str | None = ev.get("long_query_str")
-        index: VectorStoreIndex = ev.get("long_index")
-        context_titles = ev.get("context_titles")
-        context = ev.get("context")
-
-        if query_str is None:
-            return None
-
-        # query_engine = index.as_query_engine()
-        # result = query_engine.query(query_str)
-
-        long_answer = await llm.acomplete(
-            prompt=PREDICT_LONG_ANSWER_NQ.format(titles=context_titles, question=query_str, context=context),
-        )
-        # short_answer = await llm.acomplete(
-        #     prompt=EXTRACT_ANSWER.format(long_answer=str(result), question=query_str),
-        # )
-        short_answer = await llm.acomplete(
-            prompt=EXTRACT_ANSWER.format(long_answer=long_answer.text, question=query_str),
-        )
-
-        return StopEvent(
-            result={
-                "long_answer": long_answer.text,
-                "short_answer": short_answer.text,
-            }
-        )
-
     @step(pass_context=True)
     async def prepare_for_retrieval(self, ctx: Context, ev: StartEvent) -> PrepEvent | None:
         """Prepare for retrieval."""
@@ -263,7 +224,7 @@ class MindfulRAGWorkflow(Workflow):
 
         return PrepEvent()
 
-    @step(pass_context=True)
+    @step(pass_context=True, num_workers=8)
     async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent | None:
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
@@ -283,12 +244,12 @@ class MindfulRAGWorkflow(Workflow):
         # getretrieve = retrieve.retrieve(query_str)
         # logger.debug(getretrieve)
         # retriever = index.as_retriever(**retriever_kwargs)
-        retriever = index.as_retriever(similarity_top_k=DEFAULT_TOP_K)
+        retriever = index.as_retriever(similarity_top_k=8)
         # result = retrieve.retrieve(query_str)
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
-        # logger.debug(f"LongRAG retrieval scores: {[node.score for node in result]}")
+        logger.debug(f"LongRAG retrieval scores: {[node.score for node in result]}")
 
         await ctx.set("retrieved_nodes", result)
         await ctx.set("query_str", query_str)
@@ -300,27 +261,27 @@ class MindfulRAGWorkflow(Workflow):
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
         relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.7)
-        llm: LLM = await ctx.get("llm")
 
-        async def evaluate_node_relevance(node):
+        relevancy_results = []
+        for node in retrieved_nodes:
+            # Automatically consider documents with high similarity scores as relevant
             if hasattr(node, "score") and node.score is not None and node.score >= relevancy_score_threshold:
-                # relevancy_results.append("yes")
-                return "yes"
+                relevancy_results.append("yes")
+                logger.debug(f"Document with score {node.score} automatically marked as relevant")
             else:
-                async with asyncio.Semaphore(5):
-                    relevancy = await llm.acomplete(
-                        prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
-                            context_str=node.text, metadata=node.metadata, query_str=query_str
-                        )
+                # Only use LLM evaluation for documents below the threshold
+                llm: LLM = await ctx.get("llm")
+                relevancy = llm.complete(
+                    prompt=DEFAULT_RELEVANCY_PROMPT_TEMPLATE.format(
+                        context_str=node.text, metadata=node.metadata, query_str=query_str
                     )
-                    # relevancy_results.append(relevancy.text.lower().strip())
-                    return relevancy.text.lower().strip()
+                )
+                logger.debug(relevancy)
+                # relevancy_results.append(relevancy.message.content.lower().strip())
+                # relevancy_results.append(relevancy)
+                relevancy_results.append(relevancy.text.lower().strip())
+                logger.debug(relevancy_results)
 
-        # WARN this runs async
-        tasks = [evaluate_node_relevance(node) for node in retrieved_nodes]
-        relevancy_results = await asyncio.gather(*tasks)
-
-        logger.debug(relevancy_results)
         relevancy_count = sum(1 for r in relevancy_results if r == "yes")
         logger.debug(f"LongRAG context relevance: {relevancy_count}/{len(relevancy_results)} documents relevant")
 
@@ -389,21 +350,21 @@ class MindfulRAGWorkflow(Workflow):
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        long_answer = ""
-        if data_name == "hotpot_qa":
-            long_answer_completion = await llm.acomplete(
-                prompt=PREDICT_LONG_ANSWER_QA.format(
-                    titles=context_titles, question=query_str, context=context_with_attribution
-                ),
-            )
-            long_answer = long_answer_completion.text
-        else:
-            long_answer_completion = await llm.acomplete(
-                prompt=PREDICT_LONG_ANSWER_NQ.format(
-                    titles=context_titles, question=query_str, context=context_with_attribution
-                ),
-            )
-            long_answer = long_answer_completion.text
+        # long_answer = ""
+        # if data_name == "hotpot_qa":
+        #     long_answer_completion = await llm.acomplete(
+        #         prompt=PREDICT_LONG_ANSWER_QA.format(
+        #             titles=context_titles, question=query_str, context=context_with_attribution
+        #         ),
+        #     )
+        #     long_answer = long_answer_completion.text
+        # else:
+        long_answer_completion = await llm.acomplete(
+            prompt=PREDICT_LONG_ANSWER_NQ.format(
+                titles=context_titles, question=query_str, context=context_with_attribution
+            ),
+        )
+        long_answer = long_answer_completion.text
 
         short_answer = await llm.acomplete(
             prompt=EXTRACT_ANSWER.format(long_answer=long_answer, question=query_str),
@@ -414,5 +375,45 @@ class MindfulRAGWorkflow(Workflow):
                 "long_answer": long_answer,
                 "short_answer": short_answer.text,
                 "status": status,
+            }
+        )
+
+    @step
+    async def longrag_query(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
+        """Query step.
+
+        Args:
+            ctx (Context): context
+            ev (StartEvent): start event
+
+        Returns:
+            StopEvent | None: stop event with result
+        """
+        llm: LLM = ev.get("long_llm")
+        query_str: str | None = ev.get("long_query_str")
+        index: VectorStoreIndex = ev.get("long_index")
+
+        if query_str is None:
+            return None
+
+        # query_engine = index.as_query_engine()
+        # result = query_engine.query(query_str)
+        retriever = index.as_query_engine(retriever_mode="llm", choice_batch_size=5)
+        long_answer = await retriever.aquery(query_str)
+
+        # long_answer = await llm.acomplete(
+        #     prompt=PREDICT_LONG_ANSWER_NQ.format(titles=context_titles, question=query_str, context=context),
+        # )
+        # short_answer = await llm.acomplete(
+        #     prompt=EXTRACT_ANSWER.format(long_answer=str(result), question=query_str),
+        # )
+        short_answer = await llm.acomplete(
+            prompt=EXTRACT_ANSWER.format(long_answer=str(long_answer), question=query_str),
+        )
+
+        return StopEvent(
+            result={
+                "long_answer": str(long_answer),
+                "short_answer": short_answer.text,
             }
         )

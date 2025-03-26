@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     """Initialize all necessary components for the workflow"""
 
     app.state.initialization_in_progress = True
-    wf = MindfulRAGWorkflow(timeout=60)
+    wf = MindfulRAGWorkflow(timeout=60, verbose=True)
 
     # Configure embedding model
     Settings.embed_model = HuggingFaceEmbedding(

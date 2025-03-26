@@ -1632,6 +1632,86 @@ wheels = [
 ]
 
 [[package]]
+name = "llama-index-storage-docstore-dynamodb"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "llama-index-core" },
+    { name = "llama-index-storage-kvstore-dynamodb" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/31/1a/adb415e1c821f09182f784440bea68e8eabbd20130e3dc21875e2b5cea23/llama_index_storage_docstore_dynamodb-0.3.0.tar.gz", hash = "sha256:f1582c35743e5f127cbb29161d6f32f3c595add609665325ce6dad3a12e92876", size = 1742 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/70/ee60ebccb50e16a3efb5fd5128737ac27b1063bc064280848ff0165e3cc4/llama_index_storage_docstore_dynamodb-0.3.0-py3-none-any.whl", hash = "sha256:a7deb4f8144295ba6853fcc4b6849e046788e0143c48b1f682b544f09a3d6842", size = 2077 },
+]
+
+[[package]]
+name = "llama-index-storage-docstore-redis"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "llama-index-storage-kvstore-redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b6/a3/6b61031e25f2e2eb94cd9842a2000f85aa61dad0006d4396f15c9c6e6b51/llama_index_storage_docstore_redis-0.3.0.tar.gz", hash = "sha256:ba93e725031586e057ccececcc3aeeace38786f3809c0a657487268dd53a9cbc", size = 1917 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/35/49/d4f7d1406bee530b1a298185c1cacd3c70132d13c166ce39233ec6503583/llama_index_storage_docstore_redis-0.3.0-py3-none-any.whl", hash = "sha256:38c2b86e4dce5b90fd863140a85812139af0afb757283e4530da8e7898509db0", size = 2219 },
+]
+
+[[package]]
+name = "llama-index-storage-index-store-dynamodb-store"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "llama-index-core" },
+    { name = "llama-index-storage-kvstore-dynamodb" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f7/09/e6d84158492ad37e67364ad10dd64920e1a7dd3f100f4f0e9ef4feedd231/llama_index_storage_index_store_dynamodb_store-0.4.0.tar.gz", hash = "sha256:5b2b6b04ddae808ece4f3e0120f2ba2e1454498a13693843e48888ce81cb7bee", size = 1807 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/30/e1/7b4c5f31cf486f44961b072eeb85c75a712a0a793242c6f1b60d26888905/llama_index_storage_index_store_dynamodb_store-0.4.0-py3-none-any.whl", hash = "sha256:2c3525d57fa82af7c11913a4f0a022cae2b974ded61db23a6957e70cdabb5e7e", size = 2154 },
+]
+
+[[package]]
+name = "llama-index-storage-index-store-redis"
+version = "0.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "llama-index-storage-kvstore-redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9d/70/474e0da60bd35700817e8c1113dfce9b33862737ddd17e4decb9dfeaadb8/llama_index_storage_index_store_redis-0.4.0.tar.gz", hash = "sha256:3b8258b13b5d014dfc056666d59ce5afe1930584f5fad6b9a94f0fd870327e66", size = 1927 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/17/5aca4d98144a4fb6c5561417d4a3d74bbd85b03db8da913e69c1e4f7033c/llama_index_storage_index_store_redis-0.4.0-py3-none-any.whl", hash = "sha256:b785ee725f7f03ad4430bd343b4c26913a530aa9c67f232a0860ace12f89e3ff", size = 2243 },
+]
+
+[[package]]
+name = "llama-index-storage-kvstore-dynamodb"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "llama-index-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a0/43/6be52d37d4e423d1458aaf2925b1705794ed6f8cde709fb5c08d037d991c/llama_index_storage_kvstore_dynamodb-0.3.0.tar.gz", hash = "sha256:7abaded3f81e9d04bcf4bd14a3b834cd80ffbd8e56252a08dd1a24d9cd3bb40d", size = 3133 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/74/8085b86e2d90e59f978e4fd9639f7a3787082a411dd665f3c3b6efa5a9ea/llama_index_storage_kvstore_dynamodb-0.3.0-py3-none-any.whl", hash = "sha256:c7d613b5e83da6f6136449555de215a87184c59c0980c48ff8da1440e20b525b", size = 3467 },
+]
+
+[[package]]
+name = "llama-index-storage-kvstore-redis"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "llama-index-core" },
+    { name = "redis" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/4e/83339c7896923ae476be13a748d6414f30cf6b78731fff32fee3ecd8c081/llama_index_storage_kvstore_redis-0.3.0.tar.gz", hash = "sha256:f1e0d38f4d32104eccd2862dd10694075b0453e556d9adb2b3a1df8ca7172e59", size = 2903 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/9e/09d3f03da3cbe9436eb6049069ceb17632aa70f603fc062b429bea137a80/llama_index_storage_kvstore_redis-0.3.0-py3-none-any.whl", hash = "sha256:2e745d89d6cdbd64b570507ffbf0617bca982e97c2b787ad20ff7d9d0ac2f7d8", size = 3212 },
+]
+
+[[package]]
 name = "llama-index-tools-tavily-research"
 version = "0.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1668,6 +1748,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ef/92/e15ddc861acdb526ef8c5a5a9b08b8a8ec3ee1d1fde72e042d4112a0fb16/llama_index_vector_stores_chroma-0.4.1.tar.gz", hash = "sha256:70ee74ccf304adda04171d014e483759c68a1c92f679ea2ca2e6b6f45b6fef08", size = 4717 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/24/01f707c6a61887d8011df68c4b4ff6d96d985955e86a0b8638ef986a719f/llama_index_vector_stores_chroma-0.4.1-py3-none-any.whl", hash = "sha256:42200af4fa5c8df820b865825d1b506cecb922c8fbd7421eda8a5609b390c1d5", size = 5202 },
+]
+
+[[package]]
+name = "llama-index-vector-stores-dynamodb"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "boto3" },
+    { name = "llama-index-core" },
+    { name = "llama-index-storage-kvstore-dynamodb" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/79/8e/57ffcabfdb1ed3191b545684ec962efb847f6fca9ca052461388c967624c/llama_index_vector_stores_dynamodb-0.3.0.tar.gz", hash = "sha256:bddfe153a6914e6ecda90fa7941fef89900cacd042786cb27a4b9f9659eac652", size = 3064 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/70/0a8bf70b59a90310828bfcc3223e234ba906ebca48d64226ed435afa2dfb/llama_index_vector_stores_dynamodb-0.3.0-py3-none-any.whl", hash = "sha256:2a710fc5ee8a81ed01c53ab836714f306fc68216df2beb3fdfd802c84838a678", size = 3479 },
 ]
 
 [[package]]
@@ -1813,9 +1907,14 @@ dependencies = [
     { name = "llama-index-embeddings-openai" },
     { name = "llama-index-llms-gemini" },
     { name = "llama-index-readers-huggingface-fs" },
+    { name = "llama-index-storage-docstore-dynamodb" },
+    { name = "llama-index-storage-docstore-redis" },
+    { name = "llama-index-storage-index-store-dynamodb-store" },
+    { name = "llama-index-storage-index-store-redis" },
     { name = "llama-index-tools-tavily-research" },
     { name = "llama-index-utils-workflow" },
     { name = "llama-index-vector-stores-chroma" },
+    { name = "llama-index-vector-stores-dynamodb" },
     { name = "llama-index-vector-stores-pinecone" },
     { name = "loguru" },
     { name = "nest-asyncio" },
@@ -1864,9 +1963,14 @@ requires-dist = [
     { name = "llama-index-embeddings-openai", specifier = ">=0.3.1" },
     { name = "llama-index-llms-gemini", specifier = ">=0.4.10" },
     { name = "llama-index-readers-huggingface-fs", specifier = ">=0.3.1" },
+    { name = "llama-index-storage-docstore-dynamodb", specifier = ">=0.3.0" },
+    { name = "llama-index-storage-docstore-redis", specifier = ">=0.3.0" },
+    { name = "llama-index-storage-index-store-dynamodb-store", specifier = ">=0.4.0" },
+    { name = "llama-index-storage-index-store-redis", specifier = ">=0.4.0" },
     { name = "llama-index-tools-tavily-research", specifier = ">=0.3.0" },
     { name = "llama-index-utils-workflow", specifier = ">=0.3.0" },
     { name = "llama-index-vector-stores-chroma", specifier = ">=0.4.1" },
+    { name = "llama-index-vector-stores-dynamodb", specifier = ">=0.3.0" },
     { name = "llama-index-vector-stores-pinecone", specifier = ">=0.4.5" },
     { name = "loguru", specifier = ">=0.7.3" },
     { name = "nest-asyncio", specifier = ">=1.6.0" },
@@ -2935,6 +3039,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/0f/25911a9f080464c59fab9027482f822b86bf0608957a5fcc6eaac85aa515/PyYAML-6.0.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:68ccc6023a3400877818152ad9a1033e3db8625d899c72eacb5a668902e4d652", size = 751597 },
     { url = "https://files.pythonhosted.org/packages/14/0d/e2c3b43bbce3cf6bd97c840b46088a3031085179e596d4929729d8d68270/PyYAML-6.0.2-cp313-cp313-win32.whl", hash = "sha256:bc2fa7c6b47d6bc618dd7fb02ef6fdedb1090ec036abab80d4681424b84c1183", size = 140527 },
     { url = "https://files.pythonhosted.org/packages/fa/de/02b54f42487e3d3c6efb3f89428677074ca7bf43aae402517bc7cca949f3/PyYAML-6.0.2-cp313-cp313-win_amd64.whl", hash = "sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563", size = 156446 },
+]
+
+[[package]]
+name = "redis"
+version = "5.2.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/da/d283a37303a995cd36f8b92db85135153dc4f7a8e4441aa827721b442cfb/redis-5.2.1.tar.gz", hash = "sha256:16f2e22dff21d5125e8481515e386711a34cbec50f0e44413dd7d9c060a54e0f", size = 4608355 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/5f/fa26b9b2672cbe30e07d9a5bdf39cf16e3b80b42916757c5f92bca88e4ba/redis-5.2.1-py3-none-any.whl", hash = "sha256:ee7e1056b9aea0f04c6c2ed59452947f34c4940ee025f5dd83e6a6418b6989e4", size = 261502 },
 ]
 
 [[package]]

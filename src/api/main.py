@@ -8,8 +8,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from api.auth import auth
 from api.chat import chat
 from api.dependencies import lifespan
+from api.cli import CLI
 
-from .config import env_vars
+from api.config import env_vars
 
 # Load environment variables
 load_dotenv()
@@ -47,7 +48,13 @@ async def health_check():
     return {"status": "ready", "message": "System is ready to process queries"}
 
 
-def run_api(host="0.0.0.0", port=8000, reload=False):
+def run():
     """Run the FastAPI application using uvicorn"""
-    logger.info(f"Starting MiRAG API server on {host}:{port}")
-    uvicorn.run("api.main:app", host=host, port=port, reload=reload)
+    args = CLI.parse_arguments()
+    logger.debug(args)
+    logger.info(f"Starting MiRAG API server on {args.host}:{args.port}")
+    uvicorn.run("api.main:app", host=args.host, port=args.port, reload=args.reload)
+
+
+if __name__ == "__main__":
+    run()

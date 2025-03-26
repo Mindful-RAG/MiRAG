@@ -46,6 +46,11 @@ dependencies = [
     "passlib>=1.7.4",
     "pydantic[email]>=2.10.6",
     "llama-index-vector-stores-pinecone>=0.4.5",
+    "llama-index-vector-stores-dynamodb>=0.3.0",
+    "llama-index-storage-docstore-dynamodb>=0.3.0",
+    "llama-index-storage-index-store-dynamodb-store>=0.4.0",
+    "llama-index-storage-docstore-redis>=0.3.0",
+    "llama-index-storage-index-store-redis>=0.4.0",
 ]
 
 [dependency-groups]
@@ -60,6 +65,8 @@ dev = [
 
 [project.scripts]
 mirag = "mirag.main:run"
+api = "api.main:run"
+
 
 [build-system]
 requires = ["hatchling"]
