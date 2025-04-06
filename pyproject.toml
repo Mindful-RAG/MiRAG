@@ -51,6 +51,8 @@ dependencies = [
     "llama-index-storage-index-store-dynamodb-store>=0.4.0",
     "llama-index-storage-docstore-redis>=0.3.0",
     "llama-index-storage-index-store-redis>=0.4.0",
+    "llama-index-llms-azure-openai>=0.3.2",
+    "llama-index-llms-deepseek>=0.1.1",
 ]
 
 [dependency-groups]

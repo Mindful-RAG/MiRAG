@@ -28,10 +28,10 @@ def hf_dataset_to_documents(dataset, text_field, metadata_fields=None) -> List[D
         if metadata_fields:
             for field in metadata_fields:
                 if field in item and field != text_field:
-                    metadata[field] = str(item[field])
+                    metadata[field] = ",".join(map(str, item[field]))
 
         # Create a LlamaIndex Document
-        doc = Document(text=text, metadata=metadata)
+        doc = Document(text_resource=MediaResource(text=text), metadata=metadata)
         documents.append(doc)
 
     return documents

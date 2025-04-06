@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     LLM_MODEL: str = "gpt-4o-mini"
     EMBED_MODEL: str = "BAAI/bge-large-en-v1.5"
     DATA_NAME: str = "nq"
+    AZURE_OPENAI_KEY1: str = os.environ.get("AZURE_OPENAI_KEY1", "")
+    AZURE_OPENAI_KEY2: str = os.environ.get("AZURE_OPENAI_KEY2", "")
+    AZURE_REGION: str = os.environ.get("AZURE_REGION", "eastus")
+    AZURE_OPENAI_ENDPOINT: str = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+    DEEPSEEK_API_KEY: str = os.environ.get("DEEPSEEK_API_KEY", "")
+
+    # AZURE_REGION = eastus
+    # AZURE_OPENAI_ENDPOINT = https://mirag-instance.openai.azure.com/
     # AWS_ACCESS_KEY_ID: str = os.environ.get("AWS_ACCESS_KEY_ID", "")
     # AWS_SECRET_ACCESS_KEY: str = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     # GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")

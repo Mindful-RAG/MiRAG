@@ -22,6 +22,7 @@ from mirag.workflows import MindfulRAGWorkflow
 from utils.async_utils import asyncio_run
 from utils.searxng import SearXNGClient
 from mirag.config import env_vars
+from llama_index.llms.deepseek import DeepSeek
 
 nest_asyncio.apply()
 
@@ -47,9 +48,19 @@ async def main():
     # Configure LLM based on argument
     if "gpt" in args.llm:
         llm = OpenAI(model=args.llm, temperature=0)
+        # llm = AzureOpenAI(
+        #     model="gpt-4o",
+        #     deployment_name="gpt-4o",
+        #     api_key=env_vars.AZURE_OPENAI_KEY1,
+        #     azure_endpoint=env_vars.AZURE_OPENAI_ENDPOINT,
+        #     api_version="2024-12-01-preview",
+        # )
         Settings.llm = llm
     elif "gemini" in args.llm:
         llm = Gemini(model=f"models/{args.llm}")
+        Settings.llm = llm
+    elif "deepseek" in args.llm:
+        llm = DeepSeek(model=f"{args.llm}", api_key=env_vars.DEEPSEEK_API_KEY)
         Settings.llm = llm
 
     wf = MindfulRAGWorkflow(timeout=None, verbose=True)
@@ -188,8 +199,6 @@ async def main():
 
 def run():
     """Entry point for the MiRAG application"""
-
-    args = CLI.parse_arguments()
 
     logger.info("Starting MiRAG execution.")
     start = time.time()

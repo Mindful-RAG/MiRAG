@@ -18,6 +18,8 @@ from mirag.constants import (
     DEFAULT_SMALL_CHUNK_SIZE,
     DEFAULT_TOP_K,
 )
+from llama_index.vector_stores.chroma import ChromaVectorStore
+import chromadb
 
 load_dotenv()
 
@@ -39,6 +41,9 @@ class IndexManager:
             try:
                 from llama_index.core import load_index_from_storage
 
+                # client = chromadb.HttpClient(host="localhost", port=8100)
+                # collection = client.get_or_create_collection("mirag_store")
+                # vector_store = ChromaVectorStore(chroma_collection=collection)
                 # db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
                 # chroma_collection = db.get_collection(self.collection_name)
                 # logger.debug(chroma_collection.count())
@@ -102,8 +107,9 @@ class IndexManager:
             # except:
             #     pass
 
-            # chroma_collection = db.create_collection(self.collection_name)
-            # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+            # client = chromadb.HttpClient(host="localhost", port=8100)
+            # collection = client.get_or_create_collection("mirag_store")
+            # vector_store = ChromaVectorStore(chroma_collection=collection)
 
             # docstore = RedisDocumentStore.from_host_and_port(
             #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"

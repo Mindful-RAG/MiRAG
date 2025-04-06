@@ -1,9 +1,7 @@
-import asyncio
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
-from authlib.integrations.base_client.sync_openid import jwt
 from dotenv import load_dotenv
-from llama_index.core import Document, VectorStoreIndex
+from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
