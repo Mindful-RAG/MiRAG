@@ -1,16 +1,16 @@
 services:
-  dynamodb:
-    image: amazon/dynamodb-local
-    expose:
-      - 8001
-    ports:
-      - 8001:8000
-  dynamodb-admin:
-    image: aaronshaf/dynamodb-admin
-    environment:
-      DYNAMO_ENDPOINT: http://192.168.1.5:8005
-    ports:
-      - 8002:8001
+  # dynamodb:
+  #   image: amazon/dynamodb-local
+  #   expose:
+  #     - 8001
+  #   ports:
+  #     - 8001:8000
+  # dynamodb-admin:
+  #   image: aaronshaf/dynamodb-admin
+  #   environment:
+  #     DYNAMO_ENDPOINT: http://192.168.1.5:8005
+  #   ports:
+  #     - 8002:8001
 
   caddy:
     container_name: caddy
@@ -32,6 +32,10 @@ services:
     container_name: redis
     image: "redis:alpine"
     command: redis-server --save "" --appendonly "no"
+    ports:
+      - "6379:6379"
+    volumes:
+      - cache:/data
     networks:
       - searxng
     tmpfs:
@@ -65,11 +69,29 @@ services:
       options:
         max-size: "1m"
         max-file: "1"
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    environment:
+      - IS_PERSISTENT=TRUE
+    volumes:
+      # Default configuration for persist_directory in chromadb/config.py
+      # Currently it's located in "/chroma/chroma/"
+      - chroma-data:/chroma/chroma/
+    ports:
+      - 8100:8000
+    networks:
+      - net
 networks:
   searxng:
     ipam:
       driver: default
+  net:
+    driver: bridge
 
 volumes:
   caddy-data:
   caddy-config:
+  cache:
+    driver: local
+  chroma-data:
+    driver: local
