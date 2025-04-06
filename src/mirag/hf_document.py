@@ -1,6 +1,8 @@
 from typing import List
 
 from llama_index.core import Document
+from llama_index.core.schema import MediaResource
+from loguru import logger
 
 
 def hf_dataset_to_documents(dataset, text_field, metadata_fields=None) -> List[Document]:
