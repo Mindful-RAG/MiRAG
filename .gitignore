@@ -172,3 +172,4 @@ enwiki*
 .embeddings
 index*
 !src/mirag/index*
+nq_[0-9]*/**

@@ -63,7 +63,7 @@ async def main():
         llm = DeepSeek(model=f"{args.llm}", api_key=env_vars.DEEPSEEK_API_KEY)
         Settings.llm = llm
 
-    wf = MindfulRAGWorkflow(timeout=None, verbose=True)
+    wf = MindfulRAGWorkflow(timeout=None)
     logger.info("loading dataset")
     dataset = load_dataset("TIGER-LAB/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
 

@@ -1,7 +1,5 @@
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Set
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Set
 
-from datasets import load_dataset
-from icecream import ic
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
@@ -14,7 +12,6 @@ from llama_index.core.vector_stores.types import (
     BasePydanticVectorStore,
     VectorStoreQuery,
 )
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.core.workflow import (
     Context,
     Event,
@@ -23,6 +20,9 @@ from llama_index.core.workflow import (
     Workflow,
     step,
 )
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from loguru import logger
+from llama_index.core import Document
 
 # constants
 DEFAULT_CHUNK_SIZE = (
@@ -31,10 +31,12 @@ DEFAULT_CHUNK_SIZE = (
 DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
-Settings.embed_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+Settings.embed_model = HuggingFaceEmbedding(
+    model_name="BAAI/bge-large-en-v1.5", device="cuda", embed_batch_size=64, cache_folder="./.embeddings"
+)
 
 
-def split_doc(chunk_size: int, documents: List[BaseNode]) -> List[TextNode]:
+def split_doc(chunk_size: int, documents: Sequence[Document]) -> List[BaseNode]:
     """Splits documents into smaller pieces.
 
     Args:
@@ -155,6 +157,8 @@ class LongRAGRetriever(BaseRetriever):
             List[NodeWithScore]: nodes with scores
         """
         # make query
+        # logger.debug(self._grouped_nodes_dict)
+        # logger.debug(self._grouped_nodes_dict)
         query_embedding = self._embed_model.get_query_embedding(query_bundle.query_str)
         vector_store_query = VectorStoreQuery(query_embedding=query_embedding, similarity_top_k=500)
 
@@ -167,8 +171,10 @@ class LongRAGRetriever(BaseRetriever):
         for id_, similarity in zip(query_res.ids, query_res.similarities):
             cur_node = self._small_toks_dict[id_]
             parent_id = cur_node.ref_doc_id
+
             if parent_id not in top_parents_set:
                 top_parents_set.add(parent_id)
+
                 parent_node = self._grouped_nodes_dict[parent_id]
                 node_with_score = NodeWithScore(node=parent_node, score=similarity)
                 top_parents.append(node_with_score)
@@ -217,8 +223,9 @@ class LongRAGWorkflow(Workflow):
             return None
 
         if not index:
-            docs = StringIterableReader().load_data(texts=data_dir)
-            # docs = SimpleDirectoryReader(data_dir).load_data()
+            # docs = StringIterableReader().load_data(texts=data_dir)
+            docs = SimpleDirectoryReader(data_dir).load_data()
+            logger.debug(docs)
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -232,10 +239,13 @@ class LongRAGWorkflow(Workflow):
 
             index_kwargs = index_kwargs or {}
             index = VectorStoreIndex(small_nodes, **index_kwargs)
+            # logger.debug(index.docstore.get_all_ref_doc_info())
+            logger.info("creating index")
         else:
             # get smaller nodes from index and form large retrieval units from these nodes
-            small_nodes = index.docstore.docs.values()
-            grouped_nodes = get_grouped_docs(small_nodes, None)
+            logger.info("has index")
+            small_nodes = list(index.docstore.docs.values())
+            grouped_nodes = get_grouped_docs(small_nodes)
 
         return LoadNodeEvent(
             small_nodes=small_nodes,
@@ -286,9 +296,11 @@ class LongRAGWorkflow(Workflow):
         """
         query_str: str | None = ev.get("query_str")
         query_eng = ev.get("query_eng")
+        retriever = ev.get("retriever")
 
         if query_str is None:
             return None
 
+        # logger.debug(retriever.retrieve(query_str))
         result = query_eng.query(query_str)
         return StopEvent(result=result)

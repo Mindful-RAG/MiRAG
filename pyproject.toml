@@ -53,6 +53,7 @@ dependencies = [
     "llama-index-storage-index-store-redis>=0.4.0",
     "llama-index-llms-azure-openai>=0.3.2",
     "llama-index-llms-deepseek>=0.1.1",
+    "ragas>=0.2.14",
 ]
 
 [dependency-groups]

@@ -5,6 +5,7 @@ from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader
 from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.readers.string_iterable import StringIterableReader
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.storage.docstore import DocumentStore, SimpleDocumentStore
 from llama_index.core.workflow import (
@@ -137,6 +138,7 @@ class MindfulRAGWorkflow(Workflow):
             docs = hf_dataset_to_documents(
                 dataset=dataset, text_field="context", metadata_fields=["context_titles"]
             )  # metadata_fields
+            logger.debug(dir(docs[0]))
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
