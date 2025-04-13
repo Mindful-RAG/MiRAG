@@ -48,7 +48,7 @@ async def run():
     # llm = Gemini(model="models/gemini-2.0-flash")
     llm = OpenAI("gpt-4o-mini")
     data_dir = "data"
-    hf_dataset = load_dataset("TIGER-LAB/LongRAG", "nq", split="subset_100")
+    hf_dataset = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_100")
 
     # draw_all_possible_flows(wf, filename="longrag_workflow.html")
 

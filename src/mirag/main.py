@@ -65,7 +65,7 @@ async def main():
 
     wf = MindfulRAGWorkflow(timeout=None)
     logger.info("loading dataset")
-    dataset = load_dataset("TIGER-LAB/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
+    dataset = load_dataset("TIGER-Lab/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
 
     logger.info("loading index")
     index_manager = IndexManager(args.persist_path, wf, llm)

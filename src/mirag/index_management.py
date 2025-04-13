@@ -18,8 +18,6 @@ from mirag.constants import (
     DEFAULT_SMALL_CHUNK_SIZE,
     DEFAULT_TOP_K,
 )
-from llama_index.vector_stores.chroma import ChromaVectorStore
-import chromadb
 
 load_dotenv()
 
