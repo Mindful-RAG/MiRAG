@@ -10,6 +10,7 @@ from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.gemini import Gemini
 from llama_index.llms.openai import OpenAI
+from llama_index.llms.ollama import Ollama
 from loguru import logger
 from tqdm.asyncio import tqdm
 
@@ -61,6 +62,9 @@ async def main():
         Settings.llm = llm
     elif "deepseek" in args.llm:
         llm = DeepSeek(model=f"{args.llm}", api_key=env_vars.DEEPSEEK_API_KEY)
+        Settings.llm = llm
+    elif "llama" in args.llm:
+        llm = Ollama(model=f"{args.llm}", request_timeout=120.0)
         Settings.llm = llm
 
     wf = MindfulRAGWorkflow(timeout=None)

@@ -117,6 +117,7 @@
             pkgs.gcc
             pkgs.cmake
             pkgs.zlib
+            pkgs.libdrm
           ];
           env = {
             # Prevent uv from managing Python downloads
@@ -124,8 +125,9 @@
             # Force uv to use nixpkgs Python interpreter
             # UV_PYTHON = python.interpreter;
             VIRTUAL_ENV = ".venv";
-            PYTORCH_ROCM_ARCH = "gfx1030";
-            HSA_OVERRIDE_GFX_VERSION = "10.3.0";
+            PYTORCH_ROCM_ARCH = "gfx1030"; # gfx1032
+            HSA_OVERRIDE_GFX_VERSION = "10.3.0"; # 10.3.2
+            PYTORCH_HIP_ALLOC_CONF = "expandable_segments:True";
             HIP_VISIBLE_DEVICES = 0;
             LD_LIBRARY_PATH = lib.makeLibraryPath [
               pkgs.stdenv.cc.cc

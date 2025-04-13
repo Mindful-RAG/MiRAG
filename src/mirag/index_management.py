@@ -27,7 +27,7 @@ class IndexManager:
         self.persist_path = persist_path
         self.wf = wf
         self.llm = llm
-        self.collection_name = "mirag-collection"
+        self.collection_name = "nq_corpus"
 
     async def load_or_create_index(self, args, dataset=None):
         """Load an existing index or create a new one based on arguments"""
@@ -59,18 +59,23 @@ class IndexManager:
                 # docstore = SimpleDocumentStore.from_persist_dir(self.persist_path)
                 # index_store = SimpleIndexStore.from_persist_dir(self.persist_path)
 
+                db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
+                chroma_collection = db.get_collection(self.collection_name)
+                vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+                docstore = SimpleDocumentStore.from_persist_dir(self.persist_path)
+                index_store = SimpleIndexStore.from_persist_dir(self.persist_path)
                 # logger.debug(len(index_store.index_structs()))
                 # logger.debug(list(docstore.docs))
 
                 # storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)
                 storage_context = StorageContext.from_defaults(
-                    # vector_store=vector_store,
-                    # docstore=docstore,
-                    # index_store=index_store,
-                    persist_dir=self.persist_path
+                    vector_store=vector_store,
+                    docstore=docstore,
+                    index_store=index_store,
+                    # persist_dir=self.persist_path
                 )
 
-                loaded_index = load_index_from_storage(storage_context)
+                loaded_index = load_index_from_storage(storage_context, store_nodes_override=True)
 
                 # Load the index from disk
                 # storage_context = StorageContext.from_defaults(persist_dir=self.persist_path)
@@ -94,6 +99,7 @@ class IndexManager:
                 logger.error(traceback.format_exc())
                 logger.info("Will create a new index instead")
                 index = None
+                return
 
         # Create index if it wasn't loaded and dataset is provided
         if index is None and dataset is not None:
