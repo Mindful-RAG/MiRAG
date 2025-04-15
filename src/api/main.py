@@ -30,7 +30,7 @@ app.add_middleware(
 # app.state.context.llm
 
 app.add_middleware(SessionMiddleware, secret_key=env_vars.SECRET_KEY)
-app.include_router(auth.router)
+# app.include_router(auth.router)
 app.include_router(chat.router, prefix="/chat")
 
 

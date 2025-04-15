@@ -11,14 +11,14 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from jose import ExpiredSignatureError, JWTError, jwt
 from loguru import logger
 from starlette.config import Config
-from api.lib.utils import format_as_markdown
+# from api.lib.utils import format_as_markdown
 from api.models.query import QueryIn, LongragOut, MiragOut
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 
 # from api.auth.services import create_token, create_user
 from api.config import env_vars
-from api.models.user import UserIn
+# from api.models.user import UserIn
 from mirag.workflows import MindfulRAGWorkflow
 
 load_dotenv()
@@ -58,29 +58,29 @@ async def mirag_query(
         logger.debug(result)
 
         # Create markdown formatted version of the response
-        markdown = format_as_markdown(
-            query=query_request.query,
-            short_answer=result["short_answer"],
-            long_answer=result["long_answer"],
-            status=result["status"],
-        )
+        # markdown = format_as_markdown(
+        #     query=query_request.query,
+        #     short_answer=result["short_answer"],
+        #     long_answer=result["long_answer"],
+        #     status=result["status"],
+        # )
 
         return MiragOut(
             query=query_request.query,
             short_answer=result["short_answer"],
             long_answer=result["long_answer"],
             status=result["status"],
-            markdown=markdown,
+            markdown="",
         )
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
-        error_markdown = format_as_markdown(
-            query=query_request.query,
-            short_answer="Error processing query",
-            long_answer=f"An error occurred while processing your query: {str(e)}",
-            status="error",
-        )
-        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": error_markdown})
+        # error_markdown = format_as_markdown(
+        #     query=query_request.query,
+        #     short_answer="Error processing query",
+        #     long_answer=f"An error occurred while processing your query: {str(e)}",
+        #     status="error",
+        # )
+        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": ""})
 
 
 @router.post("/longrag", response_model=LongragOut)
@@ -111,25 +111,25 @@ async def longrag_query(
         logger.debug(result)
 
         # Create markdown formatted version of the response
-        markdown = format_as_markdown(
-            query=query_request.query,
-            short_answer=result["short_answer"],
-            long_answer=result["long_answer"],
-            status="",
-        )
+        # markdown = format_as_markdown(
+        #     query=query_request.query,
+        #     short_answer=result["short_answer"],
+        #     long_answer=result["long_answer"],
+        #     status="",
+        # )
 
         return LongragOut(
             query=query_request.query,
             short_answer=result["short_answer"],
             long_answer=result["long_answer"],
-            markdown=markdown,
+            markdown="",
         )
     except Exception as e:
         logger.error(f"Error processing query: {str(e)}")
-        error_markdown = format_as_markdown(
-            query=query_request.query,
-            short_answer="Error processing query",
-            long_answer=f"An error occurred while processing your query: {str(e)}",
-            status="error",
-        )
-        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": error_markdown})
+        # error_markdown = format_as_markdown(
+        #     query=query_request.query,
+        #     short_answer="Error processing query",
+        #     long_answer=f"An error occurred while processing your query: {str(e)}",
+        #     status="error",
+        # )
+        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": ""})

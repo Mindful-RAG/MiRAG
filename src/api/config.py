@@ -1,14 +1,17 @@
 import os
 from functools import lru_cache
+from dotenv import load_dotenv
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+load_dotenv()
 
 
 class Settings(BaseSettings):
     DB_HOST: str = "http://localhost:8040"
     AWS_REGION: str = "ap-southeast-1"
     PERSIST_PATH: str = os.environ.get("PERSIST_PATH", "./persisted_index")
-    SEARXNG_URL: str = os.environ.get("SEARXNG_URL", "http://localhost:8080")
+    SEARXNG_URL: str = os.environ.get("SEARXNG_URL", "http://localhost:8003")
     SECRET_KEY: str = os.environ.get("SECRET_KEY", "default_secret_key")
     ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "dev")
     FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
