@@ -61,9 +61,9 @@ class SimulationWorkflow(Workflow):
         history: List = ev.history
 
         memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
-        logger.info("strting")
         # retriever = index.as_chat_engine(llm=llm, chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT, streaming=True, context=ctx)
 
+        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
         retriever = index.as_chat_engine(
             llm=llm,
             chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT,
@@ -149,7 +149,7 @@ class MiragWorkflow(Workflow):
         query_str = await ctx.get("query_str")
         relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.7)
 
-        ctx.write_event_to_stream(ProgressEvent(progress="Check relevance"))
+        ctx.write_event_to_stream(ProgressEvent(progress="Checking relevance"))
 
         relevancy_results = []
         for node in retrieved_nodes:
@@ -195,6 +195,8 @@ class MiragWorkflow(Workflow):
         relevant_text = ev.relevant_text
         query_str = await ctx.get("query_str")
         relevancy_score = await ctx.get("relevancy_score")
+
+        ctx.write_event_to_stream(ProgressEvent(progress="Transforming queries"))
         if relevancy_score < 0.5:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
