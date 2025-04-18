@@ -26,6 +26,51 @@ DEFAULT_RELEVANCY_PROMPT_TEMPLATE = PromptTemplate(
     Please provide your binary score ('yes' or 'no') below to indicate the document's relevance to the user question."""
 )
 
+EVALUATE_QUERY = PromptTemplate(
+    template="""\
+    You are a query evaluator. Your task is to classify user inputs into one of the following types:
+
+    1. **Question** – The input is seeking specific information or an answer. It usually ends with a question mark or starts with question words like "what", "how", "why", etc.
+
+    2. **Conversational** – The input is more casual or interactive in nature. It may express thoughts, feelings, or initiate/continue a conversation without explicitly asking a question.
+
+    3. **Chat** – The input is a chat message or a part of a conversation. It may be a response to a previous message or a standalone message.
+
+    If the input is neither of the above (e.g., a statement or command), return: "neither".
+
+    Respond with only one word: "question", "conversational", "chat", or "neither".
+
+    Examples:
+    - "What is the capital of Japan?" -> question
+    - "Hey, what's up?" -> conversational
+    - "The server is running." -> neither
+    - "Tell me about the new update." -> conversational
+    - "Who won the game yesterday?" -> question
+    - "What was the previous question?" -> chat
+    - "Based from the chat or conversation, what's the summary?" -> chat
+
+    Now classify the following prompt:
+    {query_str}
+    """
+)
+
+PREDICT_ANSWER = PromptTemplate(
+    template="""\
+    Go through the following context and then get the  answer of the question from the context.
+    Choose the most relevant text from the context and answer from it.
+
+    Context:
+    -------
+    {context}
+    -------
+
+    Question:
+    -------
+    {question}
+    -------\
+    """
+)
+
 DEFAULT_TRANSFORM_QUERY_TEMPLATE = PromptTemplate(
     template="""\
     You are a question re-writer that converts an input question to a better version that is optimized

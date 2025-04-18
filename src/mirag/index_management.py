@@ -105,15 +105,15 @@ class IndexManager:
         if index is None and dataset is not None:
             logger.info("Creating new index")
 
-            # db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
+            db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
             # try:
             #     db.delete_collection(self.collection_name)
             # except:
             #     pass
 
             # client = chromadb.HttpClient(host="localhost", port=8100)
-            # collection = client.get_or_create_collection("mirag_store")
-            # vector_store = ChromaVectorStore(chroma_collection=collection)
+            collection = db.get_or_create_collection("nq_corpus")
+            vector_store = ChromaVectorStore(chroma_collection=collection)
 
             # docstore = RedisDocumentStore.from_host_and_port(
             #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"
@@ -122,17 +122,17 @@ class IndexManager:
             #     host=REDIS_HOST, port=int(REDIS_PORT), namespace="mirag_index"
             # )
 
-            # storage_context = StorageContext.from_defaults(
-            #     vector_store=vector_store,
-            #     # docstore=docstore,
-            #     # index_store=index_store,
-            #     docstore=SimpleDocumentStore(),
-            #     index_store=SimpleIndexStore(),
-            # )
+            storage_context = StorageContext.from_defaults(
+                vector_store=vector_store,
+                # docstore=docstore,
+                # index_store=index_store,
+                docstore=SimpleDocumentStore(),
+                index_store=SimpleIndexStore(),
+            )
 
             index_kwargs = {
                 "use_async": True,
-                # "storage_context": storage_context,
+                "storage_context": storage_context,
                 "show_progress": True,
                 "store_nodes_override": True,
             }
