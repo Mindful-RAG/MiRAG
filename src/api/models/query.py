@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class QueryIn(BaseModel):
     query: str
+    session_id: str
 
 
 class LongragOut(BaseModel):
