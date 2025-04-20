@@ -173,3 +173,5 @@ enwiki*
 index*
 !src/mirag/index*
 nq_[0-9]*/**
+nq_*
+summary_*

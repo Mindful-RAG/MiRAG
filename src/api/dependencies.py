@@ -8,8 +8,10 @@ from llama_index.llms.openai import OpenAI
 from loguru import logger
 
 
+from mirag.events import LongQueryStartEvent, LongQueryStopEvent, MiRAGQueryStartEvent
 from mirag.index_management import IndexManager
 from mirag.workflows import MindfulRAGWorkflow
+from mirag.workflows_factory.simulation import MiragWorkflow, SimulationWorkflow
 from utils.searxng import SearXNGClient
 from .config import env_vars
 
@@ -23,6 +25,8 @@ async def lifespan(app: FastAPI):
 
     app.state.initialization_in_progress = True
     wf = MindfulRAGWorkflow(timeout=60, verbose=True)
+    longrag = SimulationWorkflow(timeout=60, verbose=True, start_event_class=LongQueryStartEvent)
+    mirag = MiragWorkflow(timeout=60, verbose=True, start_event_class=MiRAGQueryStartEvent)
 
     # Configure embedding model
     Settings.embed_model = HuggingFaceEmbedding(
@@ -60,6 +64,8 @@ async def lifespan(app: FastAPI):
         app.state.searxng = searxng
         app.state.index = index
         app.state.wf = wf
+        app.state.longrag = longrag
+        app.state.mirag = mirag
         logger.info("Components initialized successfully")
     finally:
         app.state.initialization_in_progress = False

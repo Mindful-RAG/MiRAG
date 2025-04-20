@@ -49,13 +49,6 @@ async def main():
     # Configure LLM based on argument
     if "gpt" in args.llm:
         llm = OpenAI(model=args.llm, temperature=0)
-        # llm = AzureOpenAI(
-        #     model="gpt-4o",
-        #     deployment_name="gpt-4o",
-        #     api_key=env_vars.AZURE_OPENAI_KEY1,
-        #     azure_endpoint=env_vars.AZURE_OPENAI_ENDPOINT,
-        #     api_version="2024-12-01-preview",
-        # )
         Settings.llm = llm
     elif "gemini" in args.llm:
         llm = Gemini(model=f"models/{args.llm}")

@@ -1,16 +1,25 @@
+from collections import defaultdict
+import asyncio
+import json
 import os
 import traceback
 import uuid
 from datetime import datetime, timedelta
 
+from llama_index.core import VectorStoreIndex
+from llama_index.core.chat_engine.types import ChatMode
+from llama_index.core.llms import ChatMessage
+from llama_index.core.memory import ChatMemoryBuffer
+from llama_index.core.workflow import Context, StartEvent
 import requests
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
 from fastapi import APIRouter, Cookie, HTTPException, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from jose import ExpiredSignatureError, JWTError, jwt
 from loguru import logger
 from starlette.config import Config
+
 # from api.lib.utils import format_as_markdown
 from api.models.query import QueryIn, LongragOut, MiragOut
 
@@ -18,12 +27,21 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 
 # from api.auth.services import create_token, create_user
 from api.config import env_vars
+
 # from api.models.user import UserIn
+from mirag.events import LongQueryStartEvent, LongQueryStopEvent, MiRAGQueryStartEvent
 from mirag.workflows import MindfulRAGWorkflow
+from mirag.workflows_factory.simulation import MiragWorkflow, SimulationWorkflow
+from llama_index.core.agent.workflow import FunctionAgent
 
 load_dotenv()
 
 router = APIRouter()
+
+session_contexts = defaultdict(list)
+
+# memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
+session_memories = defaultdict(lambda: ChatMemoryBuffer.from_defaults(token_limit=1500))
 
 
 @router.post("/mirag", response_model=MiragOut)
@@ -36,8 +54,13 @@ async def mirag_query(
     index = request.app.state.index
     searxng = request.app.state.searxng
     llm = request.app.state.llm
-    wf = request.app.state.wf
+    # wf = request.app.state.wf
+    mirag: MiragWorkflow = request.app.state.mirag
 
+    history = session_contexts[query_request.session_id]
+    memory = session_memories[query_request.session_id]
+
+    history.append(ChatMessage(role="user", content=query_request.query))
     # Check if initialization is in progress
     if initialization_in_progress:
         raise HTTPException(status_code=503, detail="System is initializing. Please try again in a moment.")
@@ -46,53 +69,52 @@ async def mirag_query(
         raise HTTPException(status_code=503, detail="Index is not yet initialized. Please try again later.")
 
     # Process the query
-    try:
-        result = await wf.run(
-            query_str=query_request.query,
-            context_titles=[],  # No context titles for direct API queries
-            llm=llm,
-            index=index["index"],
-            data_name=env_vars.DATA_NAME,
-            searxng=searxng,
-        )
-        logger.debug(result)
+    event = MiRAGQueryStartEvent(
+        query_str=query_request.query, llm=llm, index=index["index"], searxng=searxng, history=history, memory=memory
+    )
+    run = mirag.run(start_event=event)
 
-        # Create markdown formatted version of the response
-        # markdown = format_as_markdown(
-        #     query=query_request.query,
-        #     short_answer=result["short_answer"],
-        #     long_answer=result["long_answer"],
-        #     status=result["status"],
-        # )
+    async def response_stream():
+        try:
+            async for event in run.stream_events():
+                if hasattr(event, "progress"):
+                    yield json.dumps({"progress": event.progress}) + "\n"
+                    await asyncio.sleep(0.01)
 
-        return MiragOut(
-            query=query_request.query,
-            short_answer=result["short_answer"],
-            long_answer=result["long_answer"],
-            status=result["status"],
-            markdown="",
-        )
-    except Exception as e:
-        logger.error(f"Error processing query: {str(e)}")
-        # error_markdown = format_as_markdown(
-        #     query=query_request.query,
-        #     short_answer="Error processing query",
-        #     long_answer=f"An error occurred while processing your query: {str(e)}",
-        #     status="error",
-        # )
-        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": ""})
+            wf = await run
+            logger.info(f"Result keys: {wf.keys()}")
+
+            result = wf["response"]
+
+            for token in result.response_gen:
+                yield json.dumps({"token": token}) + "\n"
+                await asyncio.sleep(0.005)
+
+            session_contexts[query_request.session_id].append(
+                ChatMessage(role="assistant", content=result.response, additional_kwargs={"source": "mirag"})
+            )
+
+            yield json.dumps({"done": "[DONE]"}) + "\n"
+        except Exception as e:
+            logger.error(f"Error in streaming response: {str(e)}")
+            traceback.print_exc()  # Print the full stack trace for debugging
+            yield json.dumps({"error": str(e)}) + "\n"
+            yield json.dumps({"done": "[DONE]"}) + "\n"
+
+    return StreamingResponse(
+        response_stream(),
+        media_type="application/json",
+    )
 
 
-@router.post("/longrag", response_model=LongragOut)
-async def longrag_query(
-    request: Request, query_request: QueryIn, background_tasks: BackgroundTasks
-):  # , user=Depends(auth.get_current_user) remove for now
-    """Process a query using the MindfulRAG workflow"""
+@router.post("/longrag")
+async def longrag_query(request: Request, query_request: QueryIn, background_tasks: BackgroundTasks):
+    """Process a query using LongRAG and return a streaming response"""
 
     initialization_in_progress = request.app.state.initialization_in_progress
     index = request.app.state.index
     llm = request.app.state.llm
-    wf = request.app.state.wf
+    longrag: SimulationWorkflow = request.app.state.longrag
 
     # Check if initialization is in progress
     if initialization_in_progress:
@@ -101,35 +123,33 @@ async def longrag_query(
     if not index:
         raise HTTPException(status_code=503, detail="Index is not yet initialized. Please try again later.")
 
-    # Process the query
-    try:
-        result = await wf.run(
-            long_query_str=query_request.query,
-            long_llm=llm,
-            long_index=index["index"],
-        )
-        logger.debug(result)
+    history = session_contexts[query_request.session_id]
+    memory = session_memories[query_request.session_id]
 
-        # Create markdown formatted version of the response
-        # markdown = format_as_markdown(
-        #     query=query_request.query,
-        #     short_answer=result["short_answer"],
-        #     long_answer=result["long_answer"],
-        #     status="",
-        # )
+    history.append(ChatMessage(role="user", content=query_request.query))
 
-        return LongragOut(
-            query=query_request.query,
-            short_answer=result["short_answer"],
-            long_answer=result["long_answer"],
-            markdown="",
-        )
-    except Exception as e:
-        logger.error(f"Error processing query: {str(e)}")
-        # error_markdown = format_as_markdown(
-        #     query=query_request.query,
-        #     short_answer="Error processing query",
-        #     long_answer=f"An error occurred while processing your query: {str(e)}",
-        #     status="error",
-        # )
-        raise HTTPException(status_code=500, detail={"error": str(e), "markdown": ""})
+    start_e = LongQueryStartEvent(
+        llm=llm, query_str=query_request.query, index=index["index"], history=history, memory=memory
+    )
+    wf = await longrag.run(start_event=start_e)
+
+    result = wf["response"]
+
+    async def response_stream():
+        try:
+            for token in result.response_gen:
+                yield json.dumps({"token": token}) + "\n"
+                await asyncio.sleep(0.005)
+
+            session_contexts[query_request.session_id].append(ChatMessage(role="assistant", content=result.response))
+            yield json.dumps({"done": "[DONE]"}) + "\n"
+        except Exception as e:
+            logger.error(f"Error in streaming response: {str(e)}")
+            traceback.print_exc()  # Print the full stack trace for debugging
+            yield json.dumps({"error": str(e)}) + "\n"
+            yield json.dumps({"done": "[DONE]"}) + "\n"
+
+    return StreamingResponse(
+        response_stream(),
+        media_type="application/json",
+    )

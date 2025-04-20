@@ -138,7 +138,6 @@ class MindfulRAGWorkflow(Workflow):
             docs = hf_dataset_to_documents(
                 dataset=dataset, text_field="context", metadata_fields=["context_titles"]
             )  # metadata_fields
-            logger.debug(dir(docs[0]))
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
@@ -150,14 +149,12 @@ class MindfulRAGWorkflow(Workflow):
             # split large retrieval units into smaller nodes
             small_nodes = split_doc(small_chunk_size, grouped_nodes)
 
-            logger.debug("ran in if")
             index_kwargs = index_kwargs or {}
             index = VectorStoreIndex(small_nodes, **index_kwargs)
         else:
             # get smaller nodes from index and form large retrieval units from these nodes
             small_nodes = index.docstore.docs.values()
             grouped_nodes = get_grouped_docs(small_nodes, None)
-            logger.debug("ran in else")
 
         return LoadNodeEvent(
             small_nodes=small_nodes,
@@ -396,17 +393,9 @@ class MindfulRAGWorkflow(Workflow):
         if query_str is None:
             return None
 
-        # query_engine = index.as_query_engine()
-        # result = query_engine.query(query_str)
         retriever = index.as_query_engine(retriever_mode="llm", choice_batch_size=5)
         long_answer = await retriever.aquery(query_str)
 
-        # long_answer = await llm.acomplete(
-        #     prompt=PREDICT_LONG_ANSWER_NQ.format(titles=context_titles, question=query_str, context=context),
-        # )
-        # short_answer = await llm.acomplete(
-        #     prompt=EXTRACT_ANSWER.format(long_answer=str(result), question=query_str),
-        # )
         short_answer = await llm.acomplete(
             prompt=EXTRACT_ANSWER.format(long_answer=str(long_answer), question=query_str),
         )
