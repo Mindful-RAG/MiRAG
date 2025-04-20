@@ -3,6 +3,7 @@ from typing import Iterable, List
 from llama_index.core import VectorStoreIndex
 from llama_index.core.chat_engine.types import StreamingAgentChatResponse
 from llama_index.core.llms import LLM
+from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.schema import NodeWithScore, TextNode
 from llama_index.core.workflow import Event, StartEvent, StopEvent
 
@@ -89,6 +90,7 @@ class LongQueryStartEvent(StartEvent):
     query_str: str
     index: VectorStoreIndex
     history: List
+    memory: ChatMemoryBuffer
 
 
 class LongQueryStopEvent(StopEvent):
@@ -117,6 +119,7 @@ class MiRAGQueryStartEvent(StartEvent):
     index: VectorStoreIndex
     history: List
     searxng: SearXNGClient
+    memory: ChatMemoryBuffer
 
 
 class ProcessRetrievedEvent(Event):

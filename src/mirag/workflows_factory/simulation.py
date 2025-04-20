@@ -16,7 +16,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from dotenv import load_dotenv
 from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader
-from llama_index.core.llms import LLM, CompletionResponse
+from llama_index.core.llms import LLM, ChatMessage, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.readers.string_iterable import StringIterableReader
@@ -59,8 +59,9 @@ class SimulationWorkflow(Workflow):
         query_str: str = ev.query_str
         index: VectorStoreIndex = ev.index
         history: List = ev.history
+        memory: ChatMemoryBuffer = ev.memory
 
-        memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
+        # memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
         # retriever = index.as_chat_engine(llm=llm, chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT, streaming=True, context=ctx)
 
         ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
@@ -76,6 +77,7 @@ class SimulationWorkflow(Workflow):
         )
         logger.info("done retrieving")
         streaming_response = retriever.stream_chat(query_str, chat_history=history)
+        # streaming_response.write_response_to_history(memory=memory)
 
         return StopEvent(result={"response": streaming_response})
 
@@ -90,12 +92,14 @@ class MiragWorkflow(Workflow):
         searxng: SearXNGClient = ev.searxng
         query_str = ev.query_str
         history: List = ev.history
+        memory: ChatMemoryBuffer = ev.memory
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
         await ctx.set("searxng", searxng)
         await ctx.set("query_str", query_str)
         await ctx.set("history", history)
+        await ctx.set("memory", memory)
 
         ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
         eval_query = await llm.acomplete(prompt=EVALUATE_QUERY.format(query_str=query_str))
@@ -103,8 +107,6 @@ class MiragWorkflow(Workflow):
         if eval_query.text == "question":
             return PrepEvent()
         else:
-            memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
-
             retriever = index.as_chat_engine(
                 llm=llm,
                 chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT,
@@ -117,6 +119,9 @@ class MiragWorkflow(Workflow):
             )
 
             streaming_response = retriever.stream_chat(query_str, chat_history=history)
+            # streaming_response.write_response_to_history(memory=memory)
+            logger.info(history)
+            logger.info(memory)
 
             return StopEvent(result={"response": streaming_response})
 
@@ -236,7 +241,7 @@ class MiragWorkflow(Workflow):
 
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
+        memory = await ctx.get("memory")
         index = VectorStoreIndex(nodes=[TextNode(text=relevant_text), TextNode(text=search_text)])
 
         engine = index.as_chat_engine(

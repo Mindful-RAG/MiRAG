@@ -40,6 +40,9 @@ router = APIRouter()
 
 session_contexts = defaultdict(list)
 
+# memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
+session_memories = defaultdict(lambda: ChatMemoryBuffer.from_defaults(token_limit=1500))
+
 
 @router.post("/mirag", response_model=MiragOut)
 async def mirag_query(
@@ -55,6 +58,7 @@ async def mirag_query(
     mirag: MiragWorkflow = request.app.state.mirag
 
     history = session_contexts[query_request.session_id]
+    memory = session_memories[query_request.session_id]
 
     history.append(ChatMessage(role="user", content=query_request.query))
     # Check if initialization is in progress
@@ -66,7 +70,7 @@ async def mirag_query(
 
     # Process the query
     event = MiRAGQueryStartEvent(
-        query_str=query_request.query, llm=llm, index=index["index"], searxng=searxng, history=history
+        query_str=query_request.query, llm=llm, index=index["index"], searxng=searxng, history=history, memory=memory
     )
     run = mirag.run(start_event=event)
 
@@ -86,7 +90,10 @@ async def mirag_query(
                 yield json.dumps({"token": token}) + "\n"
                 await asyncio.sleep(0.005)
 
-            session_contexts[query_request.session_id].append(ChatMessage(role="assistant", content=result.response))
+            session_contexts[query_request.session_id].append(
+                ChatMessage(role="assistant", content=result.response, additional_kwargs={"source": "mirag"})
+            )
+
             yield json.dumps({"done": "[DONE]"}) + "\n"
         except Exception as e:
             logger.error(f"Error in streaming response: {str(e)}")
@@ -117,10 +124,13 @@ async def longrag_query(request: Request, query_request: QueryIn, background_tas
         raise HTTPException(status_code=503, detail="Index is not yet initialized. Please try again later.")
 
     history = session_contexts[query_request.session_id]
+    memory = session_memories[query_request.session_id]
 
     history.append(ChatMessage(role="user", content=query_request.query))
 
-    start_e = LongQueryStartEvent(llm=llm, query_str=query_request.query, index=index["index"], history=history)
+    start_e = LongQueryStartEvent(
+        llm=llm, query_str=query_request.query, index=index["index"], history=history, memory=memory
+    )
     wf = await longrag.run(start_event=start_e)
 
     result = wf["response"]
