@@ -204,11 +204,10 @@ class MindfulRAGWorkflow(Workflow):
         llm: LLM = ev.get("llm")
         searxng: SearXNGClient = ev.get("searxng")
         data_name: str = ev.get("data_name")
+        index = ev.get("index")
 
         if query_str is None:
             return None
-
-        index = ev.get("index")
 
         await ctx.set("llm", llm)
         await ctx.set("index", index)
@@ -225,24 +224,18 @@ class MindfulRAGWorkflow(Workflow):
     async def retrieve(self, ctx: Context, ev: PrepEvent) -> RetrieveEvent | None:
         """Retrieve the relevant nodes for the query."""
         query_str = await ctx.get("query_str")
-        retriever_kwargs = await ctx.get("retriever_kwargs")
+        searxng = await ctx.get("searxng", default=None)
+        index: VectorStoreIndex = await ctx.get("index", default=None)
 
         if query_str is None:
             return None
 
-        index: VectorStoreIndex = await ctx.get("index", default=None)
-        searxng = await ctx.get("searxng", default=None)
         if not (index or searxng):
             raise ValueError(
                 "Index and searxng must be constructed. Run with 'documents' and 'searxng_url' params first."
             )
 
-        # ic("in retrieve step", index)
-        # getretrieve = retrieve.retrieve(query_str)
-        # logger.debug(getretrieve)
-        # retriever = index.as_retriever(**retriever_kwargs)
         retriever = index.as_retriever(similarity_top_k=8)
-        # result = retrieve.retrieve(query_str)
         result = retriever.retrieve(query_str)
 
         logger.debug(f"LongRAG retrieved {len(result)} documents")
@@ -274,8 +267,6 @@ class MindfulRAGWorkflow(Workflow):
                     )
                 )
                 logger.debug(relevancy)
-                # relevancy_results.append(relevancy.message.content.lower().strip())
-                # relevancy_results.append(relevancy)
                 relevancy_results.append(relevancy.text.lower().strip())
                 logger.debug(relevancy_results)
 
@@ -301,11 +292,9 @@ class MindfulRAGWorkflow(Workflow):
     async def transform_query_pipeline(self, ctx: Context, ev: TextExtractEvent) -> QueryEvent:
         """Search the transformed query with SearXNG."""
         relevant_text = ev.relevant_text
-        # relevancy_results = await ctx.get("relevancy_results")
         query_str = await ctx.get("query_str")
         relevancy_score = await ctx.get("relevancy_score")
-        # If any document is found irrelevant, transform the query string for better search results.
-        # if "no" in relevancy_results:
+
         if relevancy_score < 0.5:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
@@ -347,19 +336,8 @@ class MindfulRAGWorkflow(Workflow):
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        # long_answer = ""
-        # if data_name == "hotpot_qa":
-        #     long_answer_completion = await llm.acomplete(
-        #         prompt=PREDICT_LONG_ANSWER_QA.format(
-        #             titles=context_titles, question=query_str, context=context_with_attribution
-        #         ),
-        #     )
-        #     long_answer = long_answer_completion.text
-        # else:
         long_answer_completion = await llm.acomplete(
-            prompt=PREDICT_LONG_ANSWER_NQ.format(
-                titles=context_titles, question=query_str, context=context_with_attribution
-            ),
+            prompt=PREDICT_LONG_ANSWER_NQ.format(titles="", question=query_str, context=context_with_attribution),
         )
         long_answer = long_answer_completion.text
 
