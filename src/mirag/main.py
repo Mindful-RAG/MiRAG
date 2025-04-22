@@ -14,7 +14,7 @@ from llama_index.llms.ollama import Ollama
 from loguru import logger
 from tqdm.asyncio import tqdm
 
-# from api.main import run_api
+from mirag.benchmarks import rouge_metric
 from mirag.cli import CLI
 from mirag.data_processing import DataProcessor
 from mirag.index_management import IndexManager
@@ -172,6 +172,9 @@ async def main():
                     logger.error(traceback.format_exc())
                     failed_items.append(item)
 
+    # ROUGE Metric here
+    rouge_scores, results = rouge_metric(results, prediction_key="short_answer", answer_key="answer")
+
     output_file.close()
     await searxng.close()
     with open(args.output_file, "w") as f:
@@ -191,6 +194,7 @@ async def main():
         incorrect,
         failed_items,
         retried_items,
+        rouge_scores,
     )
 
 
