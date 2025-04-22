@@ -46,6 +46,7 @@ class ResultHandler:
                         "incorrect_match": incorrect / processed if processed > 0 else 0,
                         "failed_item_ids": [r["id"] for r in results if r.get("status") == "error"],
                         "completion_percentage": processed / len(results) * 100,
+                        "rouge_scores": results["rouge_scores"],
                     }
                 )
             )
@@ -63,22 +64,29 @@ class ResultHandler:
         incorrect,
         failed_items,
         retried_items,
+        rouge_scores,
     ):
         """Write final summary statistics to file"""
-        logger.info(f"Successfully processed: {successful_items}/{dataset_size} items")
-        logger.info(f"Failed items: {len(failed_items)}/{dataset_size}")
-        logger.info(f"Retried successfully: {len(retried_items)}")
+        logger.success(f"Successfully processed: {successful_items}/{dataset_size} items")
+        logger.success(f"Failed items: {len(failed_items)}/{dataset_size}")
+        logger.success(f"Retried successfully: {len(retried_items)}")
 
         if context_sizes:
-            logger.info(f"Context size: {sum(context_sizes) / len(context_sizes)}")
+            logger.success(f"Context size: {sum(context_sizes) / len(context_sizes)}")
 
         # Only calculate metrics on successfully processed items
         if successful_items > 0:
-            logger.info(f"Exact Match: {exact_match / successful_items}")
-            logger.info(f"Substring Match: {substring_match / successful_items}")
-            logger.info(f"Correct Match: {correct / successful_items}")
-            logger.info(f"Ambiguous Match: {ambiguous / successful_items}")
-            logger.info(f"Incorrect Match: {incorrect / successful_items}")
+            logger.success(f"Exact Match: {exact_match / successful_items}")
+            logger.success(f"Substring Match: {substring_match / successful_items}")
+            logger.success(f"Correct Match: {correct / successful_items}")
+            logger.success(f"Ambiguous Match: {ambiguous / successful_items}")
+            logger.success(f"Incorrect Match: {incorrect / successful_items}")
+            logger.success(f"Rouge1(precision): {rouge_scores['rouge1']['precision']}")
+            logger.success(f"Rouge1(recall): {rouge_scores['rouge1']['recall']}")
+            logger.success(f"Rouge1(fmeasure): {rouge_scores['rouge1']['fmeasure']}")
+            logger.success(f"RougeL(precision): {rouge_scores['rougeL']['precision']}")
+            logger.success(f"RougeL(recall): {rouge_scores['rougeL']['recall']}")
+            logger.success(f"RougeL(fmeasure): {rouge_scores['rougeL']['fmeasure']}")
         else:
             logger.warning("No items were successfully processed")
 
@@ -102,6 +110,7 @@ class ResultHandler:
                         "failed_items": [item["query_id"] for item in failed_items],
                         "retried_successfully": retried_items,
                         "completion_percentage": (successful_items / dataset_size) * 100,
+                        "rouge_scores": rouge_scores,
                     }
                 )
             )
