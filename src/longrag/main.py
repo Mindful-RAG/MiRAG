@@ -1,3 +1,4 @@
+import json
 import chromadb
 from datasets import load_dataset
 from dotenv import load_dotenv
@@ -17,6 +18,9 @@ from llama_index.storage.docstore.dynamodb import DynamoDBDocumentStore
 from llama_index.storage.index_store.dynamodb import DynamoDBIndexStore
 from llama_index.vector_stores.dynamodb import DynamoDBVectorStore
 
+from chromadb.config import Settings as ChromaSettings
+from tqdm import tqdm
+
 # from llama_index.llms.gemini import Gemini
 from longrag.utils import (
     DEFAULT_CHUNK_SIZE,
@@ -26,6 +30,8 @@ from longrag.utils import (
 )
 
 import nest_asyncio
+
+from mirag.benchmarks import rouge_metric
 
 
 load_dotenv()
@@ -44,91 +50,73 @@ async def run():
         cache_folder="./.embeddings",
         device="cuda",
     )
+    persist_path = "./nq_corpus"
+    collection_name = "nq_corpus"
     wf = LongRAGWorkflow(timeout=None, verbose=True)
     # llm = Gemini(model="models/gemini-2.0-flash")
     llm = OpenAI("gpt-4o-mini")
-    data_dir = "data"
-    hf_dataset = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_100")
+    # dataset = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_1000[:500]")
+
+    logger.info("Starting LongRAG workflow")
+    eli5 = load_dataset("sentence-transformers/eli5", split="train").select(range(500))
+
+    eli5_shape = eli5.rename_columns({"question": "query"}).add_column(
+        new_fingerprint="add_id", name="query_id", column=[f"eli5_{i}" for i in range(len(eli5))]
+    )
+
+    dataset = eli5_shape
 
     # draw_all_possible_flows(wf, filename="longrag_workflow.html")
 
-    # client = chromadb.HttpClient(host="localhost", port=8100)
-    # client.delete_collection("longrag_store")
-    # collection = client.get_or_create_collection("longrag_store")
-    # vector_store = ChromaVectorStore(chroma_collection=collection)
-    # db = chromadb.PersistentClient(path="./chroma_db")
-    # chroma_collection = db.get_or_create_collection("longrag_collection")
+    db = chromadb.PersistentClient(path=persist_path, settings=ChromaSettings(anonymized_telemetry=False))
+    chroma_collection = db.get_collection(collection_name)
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    docstore = SimpleDocumentStore.from_persist_dir(persist_path)
+    index_store = SimpleIndexStore.from_persist_dir(persist_path)
+    # logger.debug(len(index_store.index_structs()))
+    # logger.debug(list(docstore.docs))
 
-    # vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
-    # docstore = SimpleDocumentStore.from_persist_dir(persist_dir="./chroma_db")
-    # index_store = SimpleIndexStore.from_persist_dir(persist_dir="./chroma_db")
-    # storage_context = StorageContext.from_defaults(
-    # docstore=docstore,
-    # docstore=SimpleDocumentStore(),
-    # vector_store=vector_store,
-    # index_store=index_store,
-    # index_store=SimpleIndexStore(),
-    # persist_dir="./long_rag_index",
-    # )
-    # storage_context = StorageContext.from_defaults(
-    #     persist_dir="./chroma_db",
-    # )
-
-    # index_kwargs = {
-    #     "use_async": True,
-    #     "storage_context": storage_context,
-    #     "show_progress": True,
-    # "store_nodes_override": True,
-    # }
-    index_kwargs = {"use_async": True, "show_progress": True}
-    # initialize the workflow
-    # index = load_index_from_storage(
-    #     storage_context,
-    #     # store_nodes_override=True,
-    # )
-    # logger.debug(index)
-    result = await wf.run(
-        data_dir=data_dir,
-        # data_dir=hf_dataset["context"],
-        # data_dir=[],
-        # index=index,
-        llm=llm,
-        chunk_size=DEFAULT_CHUNK_SIZE,
-        similarity_top_k=DEFAULT_TOP_K,
-        small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
-        index_kwargs=index_kwargs,
+    # storage_context = StorageContext.from_defaults(vector_store=vector_store, persist_dir=self.persist_path)
+    storage_context = StorageContext.from_defaults(
+        vector_store=vector_store,
+        docstore=docstore,
+        index_store=index_store,
+        # persist_dir=self.persist_path
     )
-    # result["index"].storage_context.persist(persist_dir="./chroma_db")
-    # result["index"].storage_context.from_defaults(
-    #     docstore=docstore,
-    #     vector_store=vector_store,
-    #     index_store=index_store,
+
+    loaded_index = load_index_from_storage(storage_context, store_nodes_override=True)
+
+    # result = await wf.run(
+    #     # data_dir=data_dir,
+    #     # data_dir=hf_dataset["context"],
+    #     data_dir=[],
+    #     index=loaded_index,
+    #     llm=llm,
+    #     chunk_size=DEFAULT_CHUNK_SIZE,
+    #     similarity_top_k=DEFAULT_TOP_K,
+    #     small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
     # )
-    # result["index"].storage_context.persist("./long_rag_index")
-    query_engine = result["query_engine"]
 
-    # results = {}
-    # for query_str in hf_dataset["query"]:
-    #     print(f"Running query: {query_str}")
-    #     res = await wf.run(
-    #         query_str=query_str,
-    #         query_eng=query_engine,
-    #     )
-    #     results[query_str] = str(res)
-    #     print(f"Query result '{query_str}': {res}")
+    results = []
+    for i, item in enumerate(tqdm(dataset, desc="Querying")):
+        query, answers = item["query"], item["answer"]
+        res = await wf.run(
+            llm=llm,
+            index=loaded_index,
+            query_str=query,
+        )
+        output = {"id": item["query_id"], "query": query, "answer": answers, "long_answer": res["long_answer"]}
+        results.append(output)
 
-    # run a query
-    # Iterate over each query in the dataset and run it.
-    # query_str = "what is the meaning of PULSE Foundation?"
-    query_str = "what is the meaning of life"
-    # logger.debug(result["index"].as_retriever(similarity_top_k=DEFAULT_TOP_K).retrieve(query_str))
+    logger.info(str(results[0]))
+    rouge_scores, results = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
+    logger.success(str(rouge_scores))
+    logger.success(str(results[0]))
 
-    res = await wf.run(
-        # retriever=result["retriever"],
-        query_str=query_str,
-        query_eng=query_engine,
-    )
-    logger.info(str(res))
+    with open("longrag_lfqa_500.jsonl", "w") as f:
+        for result in results:
+            json_string = json.dumps(result)
+            f.write(f"{json_string}\n")
     # Save results to a file
     # with open("longrag_res.json", "w") as f:
     #     f.write(str(results))

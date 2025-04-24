@@ -1,10 +1,11 @@
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Sequence, Set
 
-from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
+from llama_index.core import SimpleDirectoryReader, VectorStoreIndex, get_response_synthesizer
 from llama_index.core.llms import LLM
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.readers import StringIterableReader
+from llama_index.core.response_synthesizers import ResponseMode
 from llama_index.core.retrievers import BaseRetriever
 from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNode
 from llama_index.core.settings import Settings
@@ -24,6 +25,9 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from loguru import logger
 from llama_index.core import Document
 
+from mirag.benchmarks import ELI5QueryEngine
+from mirag.prompts import ELI5_LFQA
+
 # constants
 DEFAULT_CHUNK_SIZE = (
     4096  # optionally splits documents into CHUNK_SIZE, then regroups them to demonstrate grouping algorithm
@@ -31,9 +35,9 @@ DEFAULT_CHUNK_SIZE = (
 DEFAULT_MAX_GROUP_SIZE = 20  # maximum number of documents in a group
 DEFAULT_SMALL_CHUNK_SIZE = 512  # small chunk size for generating embeddings
 DEFAULT_TOP_K = 8  # top k for retrieving
-Settings.embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-large-en-v1.5", device="cuda", embed_batch_size=64, cache_folder="./.embeddings"
-)
+# Settings.embed_model = HuggingFaceEmbedding(
+#     model_name="BAAI/bge-large-en-v1.5", device="cuda", embed_batch_size=64, cache_folder="./.embeddings"
+# )
 
 
 def split_doc(chunk_size: int, documents: Sequence[Document]) -> List[BaseNode]:
@@ -200,88 +204,88 @@ class LoadNodeEvent(Event):
 class LongRAGWorkflow(Workflow):
     """Long RAG Workflow."""
 
-    @step
-    async def ingest(self, ev: StartEvent) -> LoadNodeEvent | None:
-        """Ingestion step.
+    # @step
+    # async def ingest(self, ev: StartEvent) -> LoadNodeEvent | None:
+    #     """Ingestion step.
 
-        Args:
-            ctx (Context): Context
-            ev (StartEvent): start event
+    #     Args:
+    #         ctx (Context): Context
+    #         ev (StartEvent): start event
 
-        Returns:
-            StopEvent | None: stop event with result
-        """
-        data_dir: str | List[str] = ev.get("data_dir")
-        llm: LLM = ev.get("llm")
-        chunk_size: int | None = ev.get("chunk_size")
-        similarity_top_k: int = ev.get("similarity_top_k")
-        small_chunk_size: int = ev.get("small_chunk_size")
-        index: VectorStoreIndex | None = ev.get("index")
-        index_kwargs: dict[str, Any] | None = ev.get("index_kwargs")
+    #     Returns:
+    #         StopEvent | None: stop event with result
+    #     """
+    #     data_dir: str | List[str] = ev.get("data_dir")
+    #     llm: LLM = ev.get("llm")
+    #     chunk_size: int | None = ev.get("chunk_size")
+    #     similarity_top_k: int = ev.get("similarity_top_k")
+    #     small_chunk_size: int = ev.get("small_chunk_size")
+    #     index: VectorStoreIndex | None = ev.get("index")
+    #     index_kwargs: dict[str, Any] | None = ev.get("index_kwargs")
 
-        if any(i is None for i in [data_dir, llm, similarity_top_k, small_chunk_size]):
-            return None
+    #     if any(i is None for i in [data_dir, llm, similarity_top_k, small_chunk_size]):
+    #         return None
 
-        if not index:
-            # docs = StringIterableReader().load_data(texts=data_dir)
-            docs = SimpleDirectoryReader(data_dir).load_data()
-            logger.debug(docs)
-            if chunk_size is not None:
-                nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
-                grouped_nodes = get_grouped_docs(
-                    nodes
-                )  # get list of nodes after grouping (groups are combined into one node), these are long retrieval units
-            else:
-                grouped_nodes = docs
+    #     if not index:
+    #         # docs = StringIterableReader().load_data(texts=data_dir)
+    #         docs = SimpleDirectoryReader(data_dir).load_data()
+    #         logger.debug(docs)
+    #         if chunk_size is not None:
+    #             nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
+    #             grouped_nodes = get_grouped_docs(
+    #                 nodes
+    #             )  # get list of nodes after grouping (groups are combined into one node), these are long retrieval units
+    #         else:
+    #             grouped_nodes = docs
 
-            # split large retrieval units into smaller nodes
-            small_nodes = split_doc(small_chunk_size, grouped_nodes)
+    #         # split large retrieval units into smaller nodes
+    #         small_nodes = split_doc(small_chunk_size, grouped_nodes)
 
-            index_kwargs = index_kwargs or {}
-            index = VectorStoreIndex(small_nodes, **index_kwargs)
-            # logger.debug(index.docstore.get_all_ref_doc_info())
-            logger.info("creating index")
-        else:
-            # get smaller nodes from index and form large retrieval units from these nodes
-            logger.info("has index")
-            small_nodes = list(index.docstore.docs.values())
-            grouped_nodes = get_grouped_docs(small_nodes)
+    #         index_kwargs = index_kwargs or {}
+    #         index = VectorStoreIndex(small_nodes, **index_kwargs)
+    #         # logger.debug(index.docstore.get_all_ref_doc_info())
+    #         logger.info("creating index")
+    #     else:
+    #         # get smaller nodes from index and form large retrieval units from these nodes
+    #         logger.info("has index")
+    #         small_nodes = list(index.docstore.docs.values())
+    #         grouped_nodes = get_grouped_docs(small_nodes)
 
-        return LoadNodeEvent(
-            small_nodes=small_nodes,
-            grouped_nodes=grouped_nodes,
-            index=index,
-            similarity_top_k=similarity_top_k,
-            llm=llm,
-        )
+    #     return LoadNodeEvent(
+    #         small_nodes=small_nodes,
+    #         grouped_nodes=grouped_nodes,
+    #         index=index,
+    #         similarity_top_k=similarity_top_k,
+    #         llm=llm,
+    #     )
 
-    @step
-    async def make_query_engine(self, ctx: Context, ev: LoadNodeEvent) -> StopEvent:
-        """Query engine construction step.
+    # @step
+    # async def make_query_engine(self, ctx: Context, ev: LoadNodeEvent) -> StopEvent:
+    #     """Query engine construction step.
 
-        Args:
-            ctx (Context): context
-            ev (LoadNodeEvent): event
+    #     Args:
+    #         ctx (Context): context
+    #         ev (LoadNodeEvent): event
 
-        Returns:
-            StopEvent: stop event
-        """
-        # make retriever and query engine
-        retriever = LongRAGRetriever(
-            grouped_nodes=ev.grouped_nodes,
-            small_toks=ev.small_nodes,
-            similarity_top_k=ev.similarity_top_k,
-            vector_store=ev.index.vector_store,
-        )
-        query_eng = RetrieverQueryEngine.from_args(retriever, ev.llm)
+    #     Returns:
+    #         StopEvent: stop event
+    #     """
+    #     # make retriever and query engine
+    #     retriever = LongRAGRetriever(
+    #         grouped_nodes=ev.grouped_nodes,
+    #         small_toks=ev.small_nodes,
+    #         similarity_top_k=ev.similarity_top_k,
+    #         vector_store=ev.index.vector_store,
+    #     )
+    #     query_eng = RetrieverQueryEngine.from_args(retriever, ev.llm)
 
-        return StopEvent(
-            result={
-                "retriever": retriever,
-                "query_engine": query_eng,
-                "index": ev.index,
-            }
-        )
+    #     return StopEvent(
+    #         result={
+    #             "retriever": retriever,
+    #             "query_engine": query_eng,
+    #             "index": ev.index,
+    #         }
+    #     )
 
     @step
     async def query(self, ctx: Context, ev: StartEvent) -> StopEvent | None:
@@ -294,13 +298,21 @@ class LongRAGWorkflow(Workflow):
         Returns:
             StopEvent | None: stop event with result
         """
+        # eli5 | lfqa
+        llm: LLM = ev.get("llm")
         query_str: str | None = ev.get("query_str")
-        query_eng = ev.get("query_eng")
-        retriever = ev.get("retriever")
+        index: VectorStoreIndex = ev.get("index")
 
         if query_str is None:
             return None
 
-        # logger.debug(retriever.retrieve(query_str))
-        result = query_eng.query(query_str)
-        return StopEvent(result=result)
+        retriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
+
+        synthesizer = get_response_synthesizer(response_mode=ResponseMode.COMPACT)
+        query_engine = ELI5QueryEngine(
+            retriever=retriever, response_synthesizer=synthesizer, llm=llm, qa_prompt=ELI5_LFQA
+        )
+        long_answer = query_engine.query(query_str)
+
+        logger.debug(query_str)
+        return StopEvent(result={"long_answer": str(long_answer)})
