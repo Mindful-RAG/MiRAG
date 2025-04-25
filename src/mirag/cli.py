@@ -59,6 +59,7 @@ class CLI:
             help="Load index from disk instead of creating a new one",
         )
         parser.add_argument("--data_name", type=str, default="nq", help="Benchmark name")
+        parser.add_argument("--lfqa", action="store_true", help="lfqa metric")
         parser.add_argument(
             "--debug",
             action="store_true",

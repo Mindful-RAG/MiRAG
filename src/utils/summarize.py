@@ -43,8 +43,9 @@ def summarize_jsonl(input_path, output_path=None):
     }
 
     # Optionally, add ROUGE scores here if you want (see below)
-    # rouge_scores, _ = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
-    # summary["rouge_scores"] = rouge_scores
+    if args.rouge:
+        rouge_scores, _ = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
+        summary["rouge_scores"] = rouge_scores
     # Write summary
     if output_path is None:
         output_path = f"summary_{input_path.split('/')[-1]}"
@@ -69,6 +70,11 @@ if __name__ == "__main__":
         help="Path to output summary file (jsonl)",
     )
 
+    parser.add_argument(
+        "--rouge",
+        action="store_true",
+        help="rouge metric",
+    )
     args = parser.parse_args()
 
     summarize_jsonl(args.results_path, args.summary_path)

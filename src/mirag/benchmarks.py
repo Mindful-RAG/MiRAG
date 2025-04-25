@@ -22,25 +22,25 @@ def rouge_metric(
     for result in results:
         scorer = rouge_scorer.RougeScorer(rouge_types=["rouge1"], use_stemmer=True)
         prediction = result[prediction_key]
-        answers = result[answer_key]
+        # answers = result[answer_key]
 
-        best_scores = {}
-        for ref in answers:
-            scores = scorer.score(prediction=prediction, target=ref)
-            for rouge_type, score in scores.items():
-                score_dict = score._asdict()
-                if rouge_type not in best_scores:
-                    best_scores[rouge_type] = score_dict
-                else:
-                    # Take max for each metric
-                    for metric in score_dict:
-                        best_scores[rouge_type][metric] = max(best_scores[rouge_type][metric], score_dict[metric])
-        scores_dict = RougeMetric(rouge=best_scores).model_dump()["rouge"]
+        # best_scores = {}
+        # for ref in answers:
+        #     scores = scorer.score(prediction=prediction, target=ref)
+        #     for rouge_type, score in scores.items():
+        #         score_dict = score._asdict()
+        #         if rouge_type not in best_scores:
+        #             best_scores[rouge_type] = score_dict
+        #         else:
+        #             # Take max for each metric
+        #             for metric in score_dict:
+        #                 best_scores[rouge_type][metric] = max(best_scores[rouge_type][metric], score_dict[metric])
+        # scores_dict = RougeMetric(rouge=best_scores).model_dump()["rouge"]
+        #
+        answer = result[answer_key]
 
-        # answer = result[answer_key]
-
-        # scores = scorer.score(prediction=prediction, target=answer)
-        # scores_dict = {rouge_type: score._asdict() for rouge_type, score in scores.items()}
+        scores = scorer.score(prediction=prediction, target=answer)
+        scores_dict = {rouge_type: score._asdict() for rouge_type, score in scores.items()}
         result["rouge"] = scores_dict
         for rouge_type, metrics in scores_dict.items():
             if rouge_type not in sum_scores:

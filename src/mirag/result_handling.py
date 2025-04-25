@@ -81,17 +81,19 @@ class ResultHandler:
             logger.success(f"Correct Match: {correct / successful_items}")
             logger.success(f"Ambiguous Match: {ambiguous / successful_items}")
             logger.success(f"Incorrect Match: {incorrect / successful_items}")
-            logger.success(f"Rouge1(precision): {rouge_scores['rouge1']['precision']}")
-            logger.success(f"Rouge1(recall): {rouge_scores['rouge1']['recall']}")
-            logger.success(f"Rouge1(fmeasure): {rouge_scores['rouge1']['fmeasure']}")
-            logger.success(f"RougeL(precision): {rouge_scores['rougeL']['precision']}")
-            logger.success(f"RougeL(recall): {rouge_scores['rougeL']['recall']}")
-            logger.success(f"RougeL(fmeasure): {rouge_scores['rougeL']['fmeasure']}")
+            if args.lfqa:
+                logger.success(f"Rouge(precision): {rouge_scores['rouge1']['precision']}")
+                logger.success(f"Rouge(recall): {rouge_scores['rouge1']['recall']}")
+                logger.success(f"Rouge(fmeasure): {rouge_scores['rouge1']['fmeasure']}")
         else:
             logger.warning("No items were successfully processed")
 
         # Configuration information
         config_info = {"llm": args.llm, "embed_model": args.embed_model, "data_name": args.data_name}
+
+        rouge  = {}
+        if args.lfqa:
+            rouge = rouge_scores
 
         # Write summary to file
         with open(f"summary_{args.output_file}", "w") as f:
@@ -110,7 +112,7 @@ class ResultHandler:
                         "failed_items": [item["query_id"] for item in failed_items],
                         "retried_successfully": retried_items,
                         "completion_percentage": (successful_items / dataset_size) * 100,
-                        "rouge_scores": rouge_scores,
+                        "rouge_scores": rouge,
                     }
                 )
             )
