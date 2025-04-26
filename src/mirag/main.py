@@ -49,7 +49,7 @@ async def main():
 
     # Configure LLM based on argument
     if "gpt" in args.llm:
-        llm = OpenAI(model=args.llm, temperature=0)
+        llm = OpenAI(model=args.llm, temperature=0,seed=1234)
         Settings.llm = llm
     elif "gemini" in args.llm:
         llm = Gemini(model=f"models/{args.llm}")
@@ -65,7 +65,7 @@ async def main():
     logger.info("loading dataset")
     dataset = load_dataset("TIGER-Lab/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
     if args.lfqa:
-        eli5 = load_dataset("sentence-transformers/eli5", split="train").select(range(500))
+        eli5 = load_dataset("sentence-transformers/eli5", split="train").select(range(args.lfqa_size))
 
         eli5_shape = (
             eli5.rename_columns({"question": "query"})
@@ -185,6 +185,7 @@ async def main():
                     failed_items.append(item)
 
     # ROUGE Metric here
+    rouge_scores = {}
     if args.lfqa:
         rouge_scores, results = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
 
