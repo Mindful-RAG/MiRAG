@@ -39,8 +39,10 @@ load_dotenv()
 
 nest_asyncio.apply()
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+# logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+# logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
+
+logger.disable(name="longrag.utils")
 
 
 async def run():
@@ -50,9 +52,9 @@ async def run():
         cache_folder="./.embeddings",
         device="cuda",
     )
-    persist_path = "./nq_corpus"
+    persist_path = "./nq_corpus_full"
     collection_name = "nq_corpus"
-    wf = LongRAGWorkflow(timeout=None, verbose=True)
+    wf = LongRAGWorkflow(timeout=None)
     # llm = Gemini(model="models/gemini-2.0-flash")
     llm = OpenAI("gpt-4o-mini")
     # dataset = load_dataset("TIGER-Lab/LongRAG", "nq", split="subset_1000[:500]")
@@ -108,10 +110,7 @@ async def run():
         output = {"id": item["query_id"], "query": query, "answer": answers, "long_answer": res["long_answer"]}
         results.append(output)
 
-    logger.info(str(results[0]))
     rouge_scores, results = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
-    logger.success(str(rouge_scores))
-    logger.success(str(results[0]))
 
     with open("longrag_lfqa_500.jsonl", "w") as f:
         for result in results:
@@ -120,6 +119,48 @@ async def run():
     # Save results to a file
     # with open("longrag_res.json", "w") as f:
     #     f.write(str(results))
+
+    substring_match, exact_match = 0, 0
+    correct, ambiguous, incorrect, errors = 0, 0, 0, 0
+
+    for result in results:
+        if result.get("status") == "error":
+            errors += 1
+        else:
+            if result.get("is_exact_match", False):
+                exact_match += 1
+            if result.get("is_substring_match", False):
+                substring_match += 1
+
+            if result.get("status") == "correct":
+                correct += 1
+            elif result.get("status") == "ambiguous":
+                ambiguous += 1
+            elif result.get("status") == "incorrect":
+                incorrect += 1
+
+    processed = len(results) - errors
+
+    summary = {
+        "dataset_size": len(results),
+        "processed_items": processed,
+        "error_items": errors,
+        # "exact_match": exact_match / processed if processed > 0 else 0,
+        # "substring_match": substring_match / processed if processed > 0 else 0,
+        # "correct_match": correct / processed if processed > 0 else 0,
+        # "ambiguous_match": ambiguous / processed if processed > 0 else 0,
+        # "incorrect_match": incorrect / processed if processed > 0 else 0,
+        "failed_item_ids": [r.get("id") for r in results if r.get("status") == "error"],
+        "completion_percentage": processed / len(results) * 100 if len(results) > 0 else 0,
+    }
+
+    summary["rouge_scores"] = rouge_scores["rouge1"]
+    # Write summary
+    output_path = "summary_lfqa_500.json"
+    with open(output_path, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(f"Summary written to {output_path}")
+    logger.success(json.dumps(summary, indent=2))
 
 
 if __name__ == "__main__":
