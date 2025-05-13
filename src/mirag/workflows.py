@@ -325,7 +325,7 @@ class MindfulRAGWorkflow(Workflow):
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
-        # context_titles = await ctx.get("context_titles")
+        context_titles = await ctx.get("context_titles")
         relevancy_score = await ctx.get("relevancy_score")
         data_name = await ctx.get("data_name")
 
@@ -340,21 +340,23 @@ class MindfulRAGWorkflow(Workflow):
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
-        index = VectorStoreIndex(nodes=[TextNode(text=context_with_attribution, id_="relevant")])
-        retriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
-        synthesizer = get_response_synthesizer(response_mode=ResponseMode.COMPACT)
-        query_engine = ELI5QueryEngine(
-            retriever=retriever, response_synthesizer=synthesizer, llm=llm, qa_prompt=ELI5_LFQA
-        )
-        logger.debug(query_str)
-        response = query_engine.query(query_str)
-
-        long_answer = str(response)
-
-        # long_answer_completion = await llm.acomplete(
-        #     prompt=PREDICT_LONG_ANSWER_NQ.format(question=query_str, context=context_with_attribution),
+        # index = VectorStoreIndex(nodes=[TextNode(text=context_with_attribution, id_="relevant")])
+        # retriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
+        # synthesizer = get_response_synthesizer(response_mode=ResponseMode.COMPACT)
+        # query_engine = ELI5QueryEngine(
+        #     retriever=retriever, response_synthesizer=synthesizer, llm=llm, qa_prompt=ELI5_LFQA
         # )
-        # long_answer = long_answer_completion.text
+        # logger.debug(query_str)
+        # response = query_engine.query(query_str)
+        #
+        # long_answer = str(response)
+
+        long_answer_completion = await llm.acomplete(
+            prompt=PREDICT_LONG_ANSWER_NQ.format(
+                question=query_str, titles=context_titles, context=context_with_attribution
+            ),
+        )
+        long_answer = long_answer_completion.text
 
         short_answer = await llm.acomplete(
             prompt=EXTRACT_ANSWER.format(long_answer=long_answer, question=query_str),

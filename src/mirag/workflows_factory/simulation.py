@@ -66,19 +66,22 @@ class SimulationWorkflow(Workflow):
 
         ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
         retriever = index.as_chat_engine(
-            llm=llm,
-            chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT,
+            # llm=llm,
+            chat_mode=ChatMode.SIMPLE,
             memory=memory,
             streaming=True,
             system_prompt=(
                 "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index"
             ),
-            context=ctx,
+            verbose=True,
+            # context=ctx,
         )
         logger.info("done retrieving")
         streaming_response = retriever.stream_chat(query_str, chat_history=history)
         # streaming_response.write_response_to_history(memory=memory)
 
+        logger.info(history)
+        logger.info(memory)
         return StopEvent(result={"response": streaming_response})
 
 

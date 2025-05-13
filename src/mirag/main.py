@@ -44,12 +44,12 @@ async def main():
         model_name=args.embed_model,
         embed_batch_size=64,
         cache_folder="./.embeddings",
-        device="cuda",
+        device="mps",
     )
 
     # Configure LLM based on argument
     if "gpt" in args.llm:
-        llm = OpenAI(model=args.llm, temperature=0,seed=1234)
+        llm = OpenAI(model=args.llm, temperature=0, seed=1234)
         Settings.llm = llm
     elif "gemini" in args.llm:
         llm = Gemini(model=f"models/{args.llm}")

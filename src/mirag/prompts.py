@@ -129,10 +129,7 @@ ELI5_LFQA = PromptTemplate(
     Answer the question directly. Your answer should be concise.
     """
 )
-# Question: What happens to helium-filled birthday balloons that are released into open air?
-# Answer: they go up a few thousand feet and pop as the gas in the balloon expands beyond the stretching limit for the rubber.  No balloon will ever make it into orbit.. orbit requires thousands and thousands of miles an hour of lateral velocity
-# Question: Why does the moon have so many craters and the earth so few?
-# Answer: Partially right. It's mainly erosion, and many smaller things are lost due to disintegration in the atmosphere. Water, wind, ice, etc- they all work to reform the landscape, erasing evidence of impacts. But we still see plenty of craters in dry places or places with less erosional activity. Meteor crater in Arizona is a good example. Also, impacts in the ocean are much less likely to leave a crater (unless it's really big), and since oceans cover over half the surface area of the earth, that many less craters!
+
 EXTRACT_ANSWER = PromptTemplate(
     template="""\
     As an AI assistant, you have been provided with a question and its long answer.
