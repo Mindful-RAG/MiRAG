@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
         model_name=env_vars.EMBED_MODEL,
         embed_batch_size=64,
         cache_folder="./.embeddings",
-        device="cuda",
+        device="mps",
     )
 
     try:

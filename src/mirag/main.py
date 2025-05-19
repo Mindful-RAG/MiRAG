@@ -4,7 +4,7 @@ import time
 import traceback
 
 import nest_asyncio
-from datasets import load_dataset
+from datasets import load_dataset, Dataset
 from dotenv import load_dotenv
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -25,6 +25,7 @@ from utils.searxng import SearXNGClient
 from mirag.config import env_vars
 from llama_index.llms.deepseek import DeepSeek
 
+
 nest_asyncio.apply()
 
 load_dotenv()
@@ -43,12 +44,12 @@ async def main():
         model_name=args.embed_model,
         embed_batch_size=64,
         cache_folder="./.embeddings",
-        device="cuda",
+        device="mps",
     )
 
     # Configure LLM based on argument
     if "gpt" in args.llm:
-        llm = OpenAI(model=args.llm, temperature=0)
+        llm = OpenAI(model=args.llm, temperature=0, seed=1234)
         Settings.llm = llm
     elif "gemini" in args.llm:
         llm = Gemini(model=f"models/{args.llm}")
@@ -63,6 +64,17 @@ async def main():
     wf = MindfulRAGWorkflow(timeout=None)
     logger.info("loading dataset")
     dataset = load_dataset("TIGER-Lab/LongRAG", args.data_name, split=args.split, trust_remote_code=True, num_proc=8)
+    if args.lfqa:
+        eli5 = load_dataset("sentence-transformers/eli5", split="train").select(range(args.lfqa_size))
+
+        eli5_shape = (
+            eli5.rename_columns({"question": "query"})
+            .add_column(new_fingerprint="add_id", name="query_id", column=[f"eli5_{i}" for i in range(len(eli5))])
+            .add_column(new_fingerprint="add_context", name="context", column=dataset["context"])
+            .add_column(new_fingerprint="add_context_titles", name="context_titles", column=dataset["context_titles"])
+        )
+
+        dataset = eli5_shape
 
     logger.info("loading index")
     index_manager = IndexManager(args.persist_path, wf, llm)
@@ -173,7 +185,9 @@ async def main():
                     failed_items.append(item)
 
     # ROUGE Metric here
-    rouge_scores, results = rouge_metric(results, prediction_key="short_answer", answer_key="answer")
+    rouge_scores = {}
+    if args.lfqa:
+        rouge_scores, results = rouge_metric(results, prediction_key="long_answer", answer_key="answer")
 
     output_file.close()
     await searxng.close()
@@ -182,6 +196,7 @@ async def main():
             json_string = json.dumps(result)
             f.write(f"{json_string}\n")
 
+    logger.info("writing result")
     ResultHandler.write_final_summary(
         args,
         dataset_size,

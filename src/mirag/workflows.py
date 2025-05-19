@@ -1,11 +1,13 @@
 from typing import Any, Dict, FrozenSet, List, Optional, Set
 
+from datasets import search
 from dotenv import load_dotenv
-from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader
+from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader, get_response_synthesizer
 from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
 from llama_index.core.readers.string_iterable import StringIterableReader
+from llama_index.core.response_synthesizers import ResponseMode
 from llama_index.core.schema import BaseNode, TextNode
 from llama_index.core.storage.docstore import DocumentStore, SimpleDocumentStore
 from llama_index.core.workflow import (
@@ -17,6 +19,7 @@ from llama_index.core.workflow import (
 )
 from loguru import logger
 
+from mirag.benchmarks import ELI5QueryEngine
 from mirag.constants import DEFAULT_MAX_GROUP_SIZE, DEFAULT_TOP_K
 from mirag.events import LoadNodeEvent, PrepEvent, QueryEvent, RelevanceEvalEvent, RetrieveEvent, TextExtractEvent
 from mirag.hf_document import hf_dataset_to_documents
@@ -24,6 +27,7 @@ from mirag.longrag_retriever import LongRAGRetriever
 from mirag.prompts import (
     DEFAULT_RELEVANCY_PROMPT_TEMPLATE,
     DEFAULT_TRANSFORM_QUERY_TEMPLATE,
+    ELI5_LFQA,
     EXTRACT_ANSWER,
     PREDICT_LONG_ANSWER_NQ,
     PREDICT_LONG_ANSWER_QA,
@@ -199,7 +203,7 @@ class MindfulRAGWorkflow(Workflow):
         """Prepare for retrieval."""
 
         query_str: str | None = ev.get("query_str")
-        context_titles: str | None = ev.get("context_titles")
+        # context_titles: str | None = ev.get("context_titles")
         retriever_kwargs: dict | None = ev.get("retriever_kwargs", {})
         llm: LLM = ev.get("llm")
         searxng: SearXNGClient = ev.get("searxng")
@@ -215,7 +219,7 @@ class MindfulRAGWorkflow(Workflow):
         await ctx.set("data_name", data_name)
 
         await ctx.set("query_str", query_str)
-        await ctx.set("context_titles", context_titles)
+        # await ctx.set("context_titles", context_titles)
         await ctx.set("retriever_kwargs", retriever_kwargs)
 
         return PrepEvent()
@@ -336,8 +340,21 @@ class MindfulRAGWorkflow(Workflow):
         # Prepend "web search" if search_text is present
         context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
+        # index = VectorStoreIndex(nodes=[TextNode(text=context_with_attribution, id_="relevant")])
+        # retriever = index.as_retriever(retriever_mode="llm", choice_batch_size=5)
+        # synthesizer = get_response_synthesizer(response_mode=ResponseMode.COMPACT)
+        # query_engine = ELI5QueryEngine(
+        #     retriever=retriever, response_synthesizer=synthesizer, llm=llm, qa_prompt=ELI5_LFQA
+        # )
+        # logger.debug(query_str)
+        # response = query_engine.query(query_str)
+        #
+        # long_answer = str(response)
+
         long_answer_completion = await llm.acomplete(
-            prompt=PREDICT_LONG_ANSWER_NQ.format(titles="", question=query_str, context=context_with_attribution),
+            prompt=PREDICT_LONG_ANSWER_NQ.format(
+                question=query_str, titles=context_titles, context=context_with_attribution
+            ),
         )
         long_answer = long_answer_completion.text
 

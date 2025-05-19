@@ -112,6 +112,24 @@ PREDICT_LONG_ANSWER_QA = PromptTemplate(
     """
 )
 
+ELI5_LFQA = PromptTemplate(
+    template="""\
+    With the question: {question}
+
+    Can you explain the following context in a way that a 5-year-old can understand?
+
+    -----
+    {context}
+    -----
+
+    Break down complex concepts using simple words, analogies, and everyday examples.
+    Avoid technical jargon.
+
+    Go through the following context and then extract the answer of the question from the context.
+    Answer the question directly. Your answer should be concise.
+    """
+)
+
 EXTRACT_ANSWER = PromptTemplate(
     template="""\
     As an AI assistant, you have been provided with a question and its long answer.
