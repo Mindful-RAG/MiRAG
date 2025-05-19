@@ -1,38 +1,36 @@
-from collections import defaultdict
 import asyncio
 import json
 import os
 import traceback
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta
 
+import requests
+from authlib.integrations.starlette_client import OAuth
+from dotenv import load_dotenv
+from fastapi import APIRouter, BackgroundTasks, Cookie, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from jose import ExpiredSignatureError, JWTError, jwt
 from llama_index.core import VectorStoreIndex
+from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.chat_engine.types import ChatMode
 from llama_index.core.llms import ChatMessage
 from llama_index.core.memory import ChatMemoryBuffer
 from llama_index.core.workflow import Context, StartEvent
-import requests
-from authlib.integrations.starlette_client import OAuth
-from dotenv import load_dotenv
-from fastapi import APIRouter, Cookie, HTTPException, Request, status
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
-from jose import ExpiredSignatureError, JWTError, jwt
 from loguru import logger
 from starlette.config import Config
 
-# from api.lib.utils import format_as_markdown
-from api.models.query import QueryIn, LongragOut, MiragOut
-
-from fastapi import BackgroundTasks, FastAPI, HTTPException
-
 # from api.auth.services import create_token, create_user
 from api.config import env_vars
+
+# from api.lib.utils import format_as_markdown
+from api.models.query import LongragOut, MiragOut, QueryIn
 
 # from api.models.user import UserIn
 from mirag.events import LongQueryStartEvent, LongQueryStopEvent, MiRAGQueryStartEvent
 from mirag.workflows import MindfulRAGWorkflow
 from mirag.workflows_factory.simulation import MiragWorkflow, SimulationWorkflow
-from llama_index.core.agent.workflow import FunctionAgent
 
 load_dotenv()
 
