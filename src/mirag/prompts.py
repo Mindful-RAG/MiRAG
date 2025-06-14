@@ -48,6 +48,7 @@ EVALUATE_QUERY = PromptTemplate(
     - "Who won the game yesterday?" -> question
     - "What was the previous question?" -> chat
     - "Based from the chat or conversation, what's the summary?" -> chat
+    - "Can you tell me more about the topic?" -> question
 
     Now classify the following prompt:
     {query_str}

@@ -30,6 +30,7 @@ from llama_index.core.workflow import (
     step,
 )
 from loguru import logger
+import time
 
 from mirag.events import (
     LongQueryStartEvent,
@@ -43,7 +44,8 @@ from utils.searxng import SearXNGClient
 
 
 # refactor this, ugly af
-class SimulationWorkflow(Workflow):
+# TODO: make boundaries for irrelevant queries
+class LongRAGWorkflow(Workflow):
     @step
     async def query_longrag(self, ctx: Context, ev: LongQueryStartEvent) -> StopEvent:
         """Query step.
@@ -60,13 +62,14 @@ class SimulationWorkflow(Workflow):
         index: VectorStoreIndex = ev.index
         history: List = ev.history
         memory: ChatMemoryBuffer = ev.memory
+        start = time.time()
 
         # memory = ChatMemoryBuffer.from_defaults(token_limit=1500)
         # retriever = index.as_chat_engine(llm=llm, chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT, streaming=True, context=ctx)
 
-        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
+        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving with LongRAG"))
         retriever = index.as_chat_engine(
-            # llm=llm,
+            llm=llm,
             chat_mode=ChatMode.SIMPLE,
             memory=memory,
             streaming=True,
@@ -74,7 +77,7 @@ class SimulationWorkflow(Workflow):
                 "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index"
             ),
             verbose=True,
-            # context=ctx,
+            context=ctx,
         )
         logger.info("done retrieving")
         streaming_response = retriever.stream_chat(query_str, chat_history=history)
@@ -82,6 +85,9 @@ class SimulationWorkflow(Workflow):
 
         logger.info(history)
         logger.info(memory)
+
+        runtime = time.time() - start
+        logger.info(f"longrag execution finished in {runtime:.2f} seconds.")
         return StopEvent(result={"response": streaming_response})
 
 
@@ -97,17 +103,18 @@ class MiragWorkflow(Workflow):
         history: List = ev.history
         memory: ChatMemoryBuffer = ev.memory
 
-        await ctx.set("llm", llm)
-        await ctx.set("index", index)
-        await ctx.set("searxng", searxng)
-        await ctx.set("query_str", query_str)
-        await ctx.set("history", history)
-        await ctx.set("memory", memory)
-
-        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
-        eval_query = await llm.acomplete(prompt=EVALUATE_QUERY.format(query_str=query_str))
+        start = time.time()
+        await ctx.set("start", start)
+        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving with Mirag"))
+        eval_query = llm.complete(prompt=EVALUATE_QUERY.format(query_str=query_str))
         # this will respond: "question", "conversational", or "neither"
         if eval_query.text == "question":
+            await ctx.set("llm", llm)
+            await ctx.set("index", index)
+            await ctx.set("searxng", searxng)
+            await ctx.set("query_str", query_str)
+            await ctx.set("history", history)
+            await ctx.set("memory", memory)
             return PrepEvent()
         else:
             retriever = index.as_chat_engine(
@@ -116,7 +123,7 @@ class MiragWorkflow(Workflow):
                 memory=memory,
                 streaming=True,
                 system_prompt=(
-                    "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index"
+                    "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index and only the index"
                 ),
                 context=ctx,
             )
@@ -138,7 +145,7 @@ class MiragWorkflow(Workflow):
         if not (index or searxng):
             raise ValueError("Index and searxng must be constructed. Run with 'documents' and 'searxng' params first.")
 
-        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving"))
+        ctx.write_event_to_stream(ProgressEvent(progress="Retrieving Index Mirag"))
 
         retriever = index.as_retriever(similarity_top_k=4)
         result = retriever.retrieve(query_str)
@@ -230,19 +237,9 @@ class MiragWorkflow(Workflow):
         relevant_text = ev.relevant_text
         search_text = ev.search_text
         query_str = await ctx.get("query_str")
-        relevancy_score = await ctx.get("relevancy_score")
         history = await ctx.get("history")
 
         ctx.write_event_to_stream(ProgressEvent(progress="Querying"))
-
-        if relevancy_score > 0.5:
-            status = "correct"
-        elif relevancy_score == 0.0:
-            status = "incorrect"
-        else:
-            status = "ambiguous"
-
-        context_with_attribution = f"[Document]: {relevant_text}\n\n[Web Search]: {search_text}"
 
         memory = await ctx.get("memory")
         index = VectorStoreIndex(nodes=[TextNode(text=relevant_text), TextNode(text=search_text)])
@@ -253,16 +250,20 @@ class MiragWorkflow(Workflow):
             memory=memory,
             streaming=True,
             system_prompt=(
-                "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index"
+                "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index. Provide a detailed answer to the question, and if you don't know, say you don't know."
             ),
             context=ctx,
         )
         logger.info("done retrieving")
         streaming_response = engine.stream_chat(query_str, chat_history=history)
 
+        start = await ctx.get("start")
+
+        runtime = time.time() - start
+        logger.info(f"Mirag execution finished in {runtime:.2f} seconds.")
+
         return StopEvent(
             result={
                 "response": streaming_response,
-                "status": status,
             }
         )

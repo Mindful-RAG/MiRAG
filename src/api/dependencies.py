@@ -5,13 +5,18 @@ from fastapi import FastAPI
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.openai import OpenAI
-from loguru import logger
+from api.db import initialize_dynamodb
+from api.services.initialize_firebase import initialize_firebase
+from api.utils.observability import logger
+import boto3
+
+from llama_index.embeddings.openai import OpenAIEmbedding
 
 
-from mirag.events import LongQueryStartEvent, LongQueryStopEvent, MiRAGQueryStartEvent
+from mirag.events import LongQueryStartEvent, MiRAGQueryStartEvent
 from mirag.index_management import IndexManager
 from mirag.workflows import MindfulRAGWorkflow
-from mirag.workflows_factory.simulation import MiragWorkflow, SimulationWorkflow
+from mirag.workflows_factory.simulation import MiragWorkflow, LongRAGWorkflow
 from utils.searxng import SearXNGClient
 from .config import env_vars
 
@@ -20,13 +25,16 @@ load_dotenv()
 
 
 @asynccontextmanager
+@logger.catch
 async def lifespan(app: FastAPI):
     """Initialize all necessary components for the workflow"""
 
     app.state.initialization_in_progress = True
     wf = MindfulRAGWorkflow(timeout=60, verbose=True)
-    longrag = SimulationWorkflow(timeout=60, verbose=True, start_event_class=LongQueryStartEvent)
+    longrag = LongRAGWorkflow(timeout=60, verbose=True, start_event_class=LongQueryStartEvent)
     mirag = MiragWorkflow(timeout=60, verbose=True, start_event_class=MiRAGQueryStartEvent)
+    openai_embedding = OpenAIEmbedding()
+    s3 = boto3.client("s3")
 
     # Configure embedding model
     Settings.embed_model = HuggingFaceEmbedding(
@@ -43,6 +51,10 @@ async def lifespan(app: FastAPI):
         # Initialize SearXNG client
         searxng = SearXNGClient(instance_url=env_vars.SEARXNG_URL)
         await searxng._test_connection()
+
+        # Initialize Firebase
+        initialize_firebase()
+        await initialize_dynamodb()
 
         # Initialize index manager
         index_manager = IndexManager(env_vars.PERSIST_PATH, wf, llm)
@@ -66,6 +78,8 @@ async def lifespan(app: FastAPI):
         app.state.wf = wf
         app.state.longrag = longrag
         app.state.mirag = mirag
+        app.state.s3 = s3
+        app.state.openai_embedding = openai_embedding
         logger.info("Components initialized successfully")
     finally:
         app.state.initialization_in_progress = False

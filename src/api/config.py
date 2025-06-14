@@ -2,31 +2,53 @@ import os
 from functools import lru_cache
 from dotenv import load_dotenv
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 load_dotenv()
 
 
 class Settings(BaseSettings):
-    DB_HOST: str = "http://localhost:8040"
+    # Database settings
+    DB_HOST: str = os.environ.get("DB_HOST", "")
     AWS_REGION: str = "ap-southeast-1"
+    TABLE_NAME: str = os.environ.get("TABLE_NAME", "user-table")
+    AWS_ACCESS_KEY_ID: str = os.environ.get("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY: str = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     PERSIST_PATH: str = os.environ.get("PERSIST_PATH", "./persisted_index")
+
+    # Service URLs
     SEARXNG_URL: str = os.environ.get("SEARXNG_URL", "http://localhost:8003")
-    SECRET_KEY: str = os.environ.get("SECRET_KEY", "default_secret_key")
-    ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "dev")
     FRONTEND_URL: str = os.environ.get("FRONTEND_URL", "http://localhost:3000")
     REDIRECT_URL: str = os.environ.get("REDIRECT_URL", "http://localhost:8000/auth")
+
+    # Security settings
+    SECRET_KEY: str = os.environ.get("SECRET_KEY", "default_secret_key")
     JWT_SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY", "very_secret_key")
 
+    # Environment
+    ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "dev")
+
+    # Storage
+    BUCKET_NAME: str = os.environ.get("BUCKET_NAME", "")
+
+    # Firebase settings
+    GOOGLE_APPLICATION_CREDENTIALS: str = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    FIREBASE_PROJECT_ID: str = os.environ.get("FIREBASE_PROJECT_ID", "")
+    FIREBASE_CLIENT_EMAIL: str = os.environ.get("FIREBASE_CLIENT_EMAIL", "")
+    FIREBASE_PRIVATE_KEY: str = os.environ.get("FIREBASE_PRIVATE_KEY", "")
+
+    # AI Model settings
     LLM_MODEL: str = "gpt-4o-mini"
     EMBED_MODEL: str = "BAAI/bge-large-en-v1.5"
     DATA_NAME: str = "nq"
-    # AWS_ACCESS_KEY_ID: str = os.environ.get("AWS_ACCESS_KEY_ID", "")
-    # AWS_SECRET_ACCESS_KEY: str = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-    # GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "")
-    # GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    MAX_SIZE: int = 10 * 1024 * 1024  # 10 MB
 
-    # model_config = SettingsConfigDict(env_file=".env")
+    # CORS settings
+    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001"]
+
+    # Authentication settings
+    ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
 
 settings = Settings()
