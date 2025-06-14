@@ -59,6 +59,9 @@ dependencies = [
     "jupyter>=1.1.1",
     "mlx>=0.25.1",
     "mlx-lm>=0.24.0",
+    "python-multipart>=0.0.20",
+    "s3fs>=0.4.2",
+    "firebase-admin>=6.9.0",
 ]
 
 [dependency-groups]

@@ -1,180 +1,347 @@
-import os
 import time
 from datetime import UTC, datetime, timedelta
-import traceback
-from typing import Annotated
-
-from authlib.integrations.starlette_client import OAuth
-from fastapi import Cookie, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from typing import Annotated, Optional
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Cookie, Depends, HTTPException, status
+from firebase_admin import exceptions as firebase_exceptions
+from firebase_admin import auth as firebase_auth
 from jose import ExpiredSignatureError, JWTError, jwt
-from passlib.context import CryptContext
-from sqlalchemy.orm import Session
-from starlette import status
-from starlette.config import Config
-
-from api.db.tables import UserTable
+from loguru import logger
+from firebase_admin.auth import verify_id_token
 from api.config import env_vars
-
+from api.db.tables import UserTable
 from .models import QueryModel, TokenModel, UserModel
 
-# ALGORITHM = "HS256"
+# JWT Configuration
+ALGORITHM = "HS256"
+JWT_EXPIRATION_MINUTES = 30
 
-# bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# oauth_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
-
-# GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID") or None
-# GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET") or None
-
-# if GOOGLE_CLIENT_ID is None or GOOGLE_CLIENT_SECRET is None:
-#     raise Exception("Missing env variables")
-
-# config_data = {"GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_SECRET": GOOGLE_CLIENT_SECRET}
-
-# starlette_config = Config(environ=config_data)
-
-# oauth = OAuth(starlette_config)
-
-# oauth.register(
-#     name="google",
-#     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-#     client_kwargs={"scope": "openid email profile"},
-# )
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-# def create_access_token(data: dict, expires_delta: timedelta = None):
-#     to_encode = data.copy()
-#     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=30))
-#     to_encode.update({"exp": expire})
-#     return jwt.encode(to_encode, env_vars.JWT_SECRET_KEY, algorithm=ALGORITHM)
+class FirebaseAuthService:
+    """Firebase Authentication Service"""
+
+    @staticmethod
+    def verify_firebase_token(id_token: str) -> dict:
+        """
+        Verify Firebase ID token and return user info
+
+        Args:
+            id_token: Firebase ID token from client
+
+        Returns:
+            dict: User information from Firebase
+
+        Raises:
+            HTTPException: If token is invalid
+        """
+        try:
+            # Verify the ID token
+            decoded_token = firebase_auth.verify_id_token(id_token)
+            return decoded_token
+        except firebase_exceptions.InvalidArgumentError:
+            logger.error("Invalid Firebase token format")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token format")
+        except firebase_exceptions.FirebaseError as e:
+            logger.error(f"Firebase authentication error: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
+        except Exception as e:
+            logger.error(f"Unexpected error during token verification: {str(e)}")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication failed")
+
+    @staticmethod
+    def create_custom_token(uid: str, additional_claims: Optional[dict] = None) -> str:
+        """
+        Create a custom Firebase token
+
+        Args:
+            uid: User ID
+            additional_claims: Additional claims to include in token
+
+        Returns:
+            str: Custom Firebase token
+        """
+        try:
+            return firebase_auth.create_custom_token(uid, additional_claims)
+        except Exception as e:
+            logger.error(f"Error creating custom token: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create authentication token"
+            )
+
+    @staticmethod
+    def get_user_by_uid(uid: str):
+        """
+        Get user information from Firebase by UID
+
+        Args:
+            uid: User ID
+
+        Returns:
+            UserRecord: Firebase user record
+        """
+        try:
+            return firebase_auth.get_user(uid)
+        except firebase_auth.UserNotFoundError:
+            logger.error(f"User not found: {uid}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        except Exception as e:
+            logger.error(f"Error getting user: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get user information"
+            )
+
+    @staticmethod
+    def get_user_by_email(email: str):
+        """
+        Get user information from Firebase by email
+
+        Args:
+            email: User email
+
+        Returns:
+            UserRecord: Firebase user record
+        """
+        try:
+            return firebase_auth.get_user_by_email(email)
+        except firebase_auth.UserNotFoundError:
+            logger.error(f"User not found: {email}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        except Exception as e:
+            logger.error(f"Error getting user by email: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to get user information"
+            )
 
 
-# def get_current_user(token: str = Cookie(None)):
-#     if not token:
-#         raise HTTPException(status_code=401, detail="Not authenticated")
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create JWT access token
 
-#     credentials_exception = HTTPException(
-#         status_code=401,
-#         detail="Could not validate credentials",
-#         headers={"WWW-Authenticate": "Bearer"},
-#     )
-#     try:
-#         payload = jwt.decode(token, env_vars.JWT_SECRET_KEY, algorithms=[ALGORITHM])
+    Args:
+        data: Data to encode in token
+        expires_delta: Token expiration time
 
-#         user_id: str = payload.get("sub")
-#         user_email: str = payload.get("email")
+    Returns:
+        str: JWT token
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(UTC) + expires_delta
+    else:
+        expire = datetime.now(UTC) + timedelta(minutes=JWT_EXPIRATION_MINUTES)
 
-#         if user_id is None or user_email is None:
-#             raise credentials_exception
-
-#         return {"user_id": user_id, "user_email": user_email}
-
-#     except ExpiredSignatureError:
-#         # Specifically handle expired tokens
-#         traceback.print_exc()
-#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired. Please login again.")
-#     except JWTError:
-#         # Handle other JWT-related errors
-#         traceback.print_exc()
-#         raise credentials_exception
-#     except Exception:
-#         traceback.print_exc()
-#         raise HTTPException(status_code=401, detail="Not Authenticated")
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, env_vars.JWT_SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 
-# def create_refresh_token(data: dict, expires_delta: timedelta):
-#     return create_access_token(data, expires_delta)
+def verify_jwt_token(token: str) -> dict:
+    """
+    Verify JWT token and return payload
+
+    Args:
+        token: JWT token
+
+    Returns:
+        dict: Token payload
+
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = firebase_auth.verify_id_token(token)
+        user_id: str = payload.get("sub")
+        user_email: str = payload.get("email")
+
+        if user_id is None or user_email is None:
+            raise credentials_exception
+
+        return payload
+
+    except ExpiredSignatureError:
+        logger.error("JWT token has expired")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session expired. Please login again.")
+    except JWTError as e:
+        logger.error(f"JWT error: {str(e)}")
+        raise credentials_exception
+    except Exception as e:
+        logger.error(f"Unexpected error during JWT verification: {str(e)}")
+        raise credentials_exception
 
 
-# def decode_token(token):
-#     return jwt.decode(token, os.getenv("SECRET_KEY"), algorithms=ALGORITHM)
+async def get_current_user(token: Optional[str] = Cookie(None, alias="access_token")) -> dict:
+    """
+    Get current user from JWT token in cookie
+
+    Args:
+        token: JWT token from cookie
+
+    Returns:
+        dict: User information
+
+    Raises:
+        HTTPException: If not authenticated
+    """
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    payload = verify_jwt_token(token)
+    return {
+        "user_id": payload.get("sub"),
+        "user_email": payload.get("email"),
+        "user_name": payload.get("name"),
+        "user_pic": payload.get("picture"),
+    }
 
 
-# def token_expired(token: Annotated[str, Depends(oauth_bearer)]):
-#     try:
-#         payload = decode_token(token)
-#         if not datetime.fromtimestamp(payload.get("exp"), UTC) > datetime.now(UTC):
-#             return True
-#         return False
+async def get_optional_user(token: Optional[str] = Cookie(None, alias="access_token")) -> Optional[dict]:
+    """
+    Get current user if authenticated, otherwise return None
 
-#     except JWTError:
-#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Could not validate user.")
+    Args:
+        token: JWT token from cookie
 
+    Returns:
+        dict or None: User information if authenticated, None otherwise
+    """
+    if not token:
+        return None
 
-# user_dependency = Annotated[dict, Depends(get_current_user)]
-
-
-# def create_user(
-#     user_id: str,
-#     user_email: str,
-#     user_name: str,
-#     user_pic: str = None,
-#     first_logged_in: int = None,
-#     last_accessed: int = None,
-# ) -> UserTable:
-#     """
-#     Log user information to the database
-#     """
-#     # Validate with Pydantic
-#     user = UserModel(
-#         user_id=user_id,
-#         user_email=user_email,
-#         user_name=user_name,
-#         user_pic=user_pic,
-#         first_logged_in=first_logged_in or int(time.time()),
-#         last_accessed=last_accessed or int(time.time()),
-#     )
-
-#     # Save to DynamoDB
-#     item = UserTable(
-#         pk=f"USER#{user.user_id}",
-#         sk="PROFILE",
-#         user_id=user.user_id,
-#         user_email=user.user_email,
-#         user_name=user.user_name,
-#         user_pic=str(user.user_pic) if user.user_pic else None,
-#         first_logged_in=user.first_logged_in,
-#         last_accessed=user.last_accessed,
-#     )
-#     item.save()
-#     return item
+    try:
+        return await get_current_user(token)
+    except HTTPException:
+        return None
 
 
-# def create_token(access_token: str, user_email: str, session_id: str) -> UserTable:
-#     """
-#     Log token information to the database
-#     """
-#     # Validate with Pydantic
-#     token = TokenModel(access_token=access_token, user_email=user_email, session_id=session_id)
+def create_user(
+    user_id: str,
+    user_email: str,
+    user_name: str,
+    user_pic: Optional[str] = None,
+    first_logged_in: Optional[int] = None,
+    last_accessed: Optional[int] = None,
+) -> UserTable:
+    """
+    Create or update user information in the database
 
-#     # Save to DynamoDB
-#     item = UserTable(
-#         pk=f"TOKEN#{token.access_token}",
-#         sk=f"EMAIL#{token.user_email}",
-#         access_token=token.access_token,
-#         user_email=token.user_email,
-#         session_id=token.session_id,
-#     )
-#     item.save()
-#     return item
+    Args:
+        user_id: User ID
+        user_email: User email
+        user_name: User name
+        user_pic: User profile picture URL
+        first_logged_in: First login timestamp
+        last_accessed: Last accessed timestamp
+
+    Returns:
+        UserTable: Created user record
+    """
+    try:
+        # Validate with Pydantic
+        user = UserModel(
+            user_id=user_id,
+            user_email=user_email,
+            user_name=user_name,
+            user_pic=user_pic,
+            first_logged_in=first_logged_in or int(time.time()),
+            last_accessed=last_accessed or int(time.time()),
+        )
+
+        # Save to DynamoDB
+        item = UserTable(
+            pk=f"USER#{user.user_id}",
+            sk="PROFILE",
+            user_id=user.user_id,
+            user_email=user.user_email,
+            user_name=user.user_name,
+            user_pic=str(user.user_pic) if user.user_pic else None,
+            first_logged_in=user.first_logged_in,
+            last_accessed=user.last_accessed,
+        )
+        item.save()
+        logger.info(f"User created/updated: {user_email}")
+        return item
+
+    except Exception as e:
+        logger.error(f"Error creating user: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create user")
 
 
-# def create_query(query_id: str, user_id: str, user_email: str, answer: str) -> UserTable:
-#     """
-#     Log query information to the database
-#     """
-#     # Validate with Pydantic
-#     query = QueryModel(query_id=query_id, user_id=user_id, user_email=user_email, answer=answer)
+def create_token(access_token: str, user_email: str, session_id: str) -> UserTable:
+    """
+    Store token information in the database
 
-#     # Save to DynamoDB
-#     item = UserTable(
-#         pk=f"USER#{query.user_id}",
-#         sk=f"QUERY#{query.query_id}",
-#         query_id=query.query_id,
-#         user_id=query.user_id,
-#         user_email=query.user_email,
-#         answer=query.answer,
-#     )
-#     item.save()
-#     return item
+    Args:
+        access_token: JWT access token
+        user_email: User email
+        session_id: Session ID
+
+    Returns:
+        UserTable: Created token record
+    """
+    try:
+        # Validate with Pydantic
+        token = TokenModel(access_token=access_token, user_email=user_email, session_id=session_id)
+
+        # Save to DynamoDB
+        item = UserTable(
+            pk=f"TOKEN#{token.access_token}",
+            sk=f"EMAIL#{token.user_email}",
+            access_token=token.access_token,
+            user_email=token.user_email,
+            session_id=token.session_id,
+        )
+        item.save()
+        logger.info(f"Token stored for user: {user_email}")
+        return item
+
+    except Exception as e:
+        logger.error(f"Error storing token: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to store token")
+
+
+def create_query(query_id: str, user_id: str, user_email: str, answer: str) -> UserTable:
+    """
+    Store query information in the database
+
+    Args:
+        query_id: Query ID
+        user_id: User ID
+        user_email: User email
+        answer: Query answer
+
+    Returns:
+        UserTable: Created query record
+    """
+    try:
+        # Validate with Pydantic
+        query = QueryModel(query_id=query_id, user_id=user_id, user_email=user_email, answer=answer)
+
+        # Save to DynamoDB
+        item = UserTable(
+            pk=f"USER#{query.user_id}",
+            sk=f"QUERY#{query.query_id}",
+            query_id=query.query_id,
+            user_id=query.user_id,
+            user_email=query.user_email,
+            answer=query.answer,
+        )
+        item.save()
+        logger.info(f"Query stored for user: {user_email}")
+        return item
+
+    except Exception as e:
+        logger.error(f"Error storing query: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to store query")
+
+
+# Dependency for protected routes
+UserDependency = Annotated[dict, Depends(get_current_user)]
+OptionalUserDependency = Annotated[Optional[dict], Depends(get_optional_user)]
