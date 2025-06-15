@@ -1,9 +1,11 @@
 from pydantic import BaseModel
+from typing import Optional
 
 
 class QueryIn(BaseModel):
     query: str
     session_id: str
+    custom_corpus_id: Optional[str] = None
 
 
 class LongragOut(BaseModel):
@@ -30,3 +32,10 @@ class UserCreate(BaseModel):
 class Token(BaseModel):
     access_token: str
     token_type: str
+
+
+class UploadResponse(BaseModel):
+    file: str
+    content_type: str
+    size: int
+    corpus_id: str
