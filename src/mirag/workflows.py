@@ -2,7 +2,8 @@ from typing import Any, Dict, FrozenSet, List, Optional, Set
 
 from datasets import search
 from dotenv import load_dotenv
-from llama_index.core import Document, VectorStoreIndex, SimpleDirectoryReader, get_response_synthesizer
+from llama_index.core import Document, Settings, VectorStoreIndex, SimpleDirectoryReader, get_response_synthesizer
+from llama_index.core.base.embeddings.base import BaseEmbedding
 from llama_index.core.llms import LLM, CompletionResponse
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.query_engine import RetrieverQueryEngine
@@ -138,10 +139,15 @@ class MindfulRAGWorkflow(Workflow):
         if any(i is None for i in [dataset, llm, similarity_top_k, small_chunk_size]):
             return None
         if not index:
-            # docs = StringIterableReader().load_data(texts=dataset)
-            docs = hf_dataset_to_documents(
-                dataset=dataset, text_field="context", metadata_fields=["context_titles"]
-            )  # metadata_fields
+            if isinstance(dataset, (List, Document)):
+                docs = dataset
+            else:
+                # this is default document corpus
+                docs = hf_dataset_to_documents(
+                    dataset=dataset, text_field="context", metadata_fields=["context_titles"]
+                )  # metadata_fields
+                # docs = StringIterableReader().load_data(texts=dataset)
+
             if chunk_size is not None:
                 nodes = split_doc(chunk_size, docs)  # split documents into chunks of chunk_size
                 grouped_nodes = get_grouped_docs(
