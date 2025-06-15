@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     EMBED_MODEL: str = "BAAI/bge-large-en-v1.5"
     DATA_NAME: str = "nq"
     MAX_SIZE: int = 10 * 1024 * 1024  # 10 MB
+    DEFAULT_CORPUS: str = "nq_corpus"
 
     # CORS settings
     ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001"]

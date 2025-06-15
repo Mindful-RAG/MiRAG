@@ -36,17 +36,15 @@ async def lifespan(app: FastAPI):
     openai_embedding = OpenAIEmbedding()
     s3 = boto3.client("s3")
 
-    # Configure embedding model
-    Settings.embed_model = HuggingFaceEmbedding(
-        model_name=env_vars.EMBED_MODEL,
-        embed_batch_size=64,
-        cache_folder="./.embeddings",
-        device="mps",
-    )
-
     try:
         llm = OpenAI(model=env_vars.LLM_MODEL, temperature=0)
         Settings.llm = llm
+        Settings.embed_model = HuggingFaceEmbedding(
+            model_name=env_vars.EMBED_MODEL,
+            embed_batch_size=64,
+            cache_folder="./.embeddings",
+            device="mps",
+        )
 
         # Initialize SearXNG client
         searxng = SearXNGClient(instance_url=env_vars.SEARXNG_URL)
@@ -63,6 +61,7 @@ async def lifespan(app: FastAPI):
         class Args:
             load_index = True
             persist_index = False
+            collection_name = env_vars.DEFAULT_CORPUS
 
         # Create a mock args object with just what we need
         args = Args()
@@ -80,6 +79,7 @@ async def lifespan(app: FastAPI):
         app.state.mirag = mirag
         app.state.s3 = s3
         app.state.openai_embedding = openai_embedding
+        app.state.custom_indexes = {}  # Dictionary to store custom indexes by corpus_id
         logger.info("Components initialized successfully")
     finally:
         app.state.initialization_in_progress = False

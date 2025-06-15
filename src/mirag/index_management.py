@@ -2,7 +2,9 @@ import os
 from llama_index.core.vector_stores.simple import SimpleVectorStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
 import traceback
-from chromadb.config import Settings
+from chromadb.config import Settings as ChromaSettings
+
+from llama_index.core import Settings
 import chromadb
 from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.storage import StorageContext
@@ -27,9 +29,8 @@ class IndexManager:
         self.persist_path = persist_path
         self.wf = wf
         self.llm = llm
-        self.collection_name = "nq_corpus"
 
-    async def load_or_create_index(self, args, dataset=None):
+    async def load_or_create_index(self, args, dataset=None, embed_model=Settings.embed_model):
         """Load an existing index or create a new one based on arguments"""
         index = None
 
@@ -59,8 +60,10 @@ class IndexManager:
                 # docstore = SimpleDocumentStore.from_persist_dir(self.persist_path)
                 # index_store = SimpleIndexStore.from_persist_dir(self.persist_path)
 
-                db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
-                chroma_collection = db.get_collection(self.collection_name)
+                db = chromadb.PersistentClient(
+                    path=self.persist_path, settings=ChromaSettings(anonymized_telemetry=False)
+                )
+                chroma_collection = db.get_collection(args.collection_name)
                 vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
                 docstore = SimpleDocumentStore.from_persist_dir(self.persist_path)
                 index_store = SimpleIndexStore.from_persist_dir(self.persist_path)
@@ -83,6 +86,10 @@ class IndexManager:
 
                 # Run a minimal workflow step to get the index in the right format
                 # We just need to convert the loaded index into the format expected by the workflow
+                index_kwargs = {
+                    "embed_model": embed_model,
+                }
+
                 index = await self.wf.run(
                     dataset=[],  # Empty dataset since we're loading the index
                     llm=self.llm,
@@ -90,7 +97,8 @@ class IndexManager:
                     chunk_size=DEFAULT_CHUNK_SIZE,
                     similarity_top_k=DEFAULT_TOP_K,
                     small_chunk_size=DEFAULT_SMALL_CHUNK_SIZE,
-                    index_kwargs={"use_async": True},
+                    index_kwargs=index_kwargs,
+                    # index_kwargs={"use_async": True},
                 )
                 logger.info("Successfully loaded index from disk")
 
@@ -105,14 +113,14 @@ class IndexManager:
         if index is None and dataset is not None:
             logger.info("Creating new index")
 
-            db = chromadb.PersistentClient(path=self.persist_path, settings=Settings(anonymized_telemetry=False))
+            db = chromadb.PersistentClient(path=self.persist_path, settings=ChromaSettings(anonymized_telemetry=False))
             # try:
             #     db.delete_collection(self.collection_name)
             # except:
             #     pass
 
             # client = chromadb.HttpClient(host="localhost", port=8100)
-            collection = db.get_or_create_collection("nq_corpus")
+            collection = db.get_or_create_collection(args.collection_name)
             vector_store = ChromaVectorStore(chroma_collection=collection)
 
             # docstore = RedisDocumentStore.from_host_and_port(
@@ -131,10 +139,11 @@ class IndexManager:
             )
 
             index_kwargs = {
-                "use_async": True,
+                # "use_async": True,
                 "storage_context": storage_context,
                 "show_progress": True,
                 "store_nodes_override": True,
+                "embed_model": embed_model,
             }
 
             index = await self.wf.run(
