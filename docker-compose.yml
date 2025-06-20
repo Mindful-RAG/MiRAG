@@ -1,16 +1,16 @@
 services:
-  # dynamodb:
-  #   image: amazon/dynamodb-local
-  #   expose:
-  #     - 8001
-  #   ports:
-  #     - 8001:8000
-  # dynamodb-admin:
-  #   image: aaronshaf/dynamodb-admin
-  #   environment:
-  #     DYNAMO_ENDPOINT: http://192.168.1.5:8005
-  #   ports:
-  #     - 8002:8001
+  dynamodb:
+    image: amazon/dynamodb-local
+    expose:
+      - 8001
+    ports:
+      - 8001:8000
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin
+    environment:
+      DYNAMO_ENDPOINT: http://localhost:8001
+    ports:
+      - 8002:8001
 
   caddy:
     container_name: caddy
