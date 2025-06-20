@@ -3,9 +3,10 @@ from typing import Any, Dict, List, NamedTuple, Optional
 
 import aiohttp
 from loguru import logger
+from pydantic import BaseModel
 
 
-class Document(NamedTuple):
+class Document(BaseModel):
     """Document class to represent search results."""
 
     title: str

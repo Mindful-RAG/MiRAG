@@ -7,6 +7,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.openai import OpenAI
 from api.db import initialize_dynamodb
 from api.services.initialize_firebase import initialize_firebase
+from api.services.chat.dynamodb_setup import create_chat_store_tables
 from api.utils.observability import logger
 import boto3
 
@@ -19,6 +20,8 @@ from mirag.workflows import MindfulRAGWorkflow
 from mirag.workflows_factory.simulation import MiragWorkflow, LongRAGWorkflow
 from utils.searxng import SearXNGClient
 from .config import env_vars
+from slowapi.util import get_remote_address
+from slowapi import Limiter
 
 # Load environment variables
 load_dotenv()
@@ -53,6 +56,15 @@ async def lifespan(app: FastAPI):
         # Initialize Firebase
         initialize_firebase()
         await initialize_dynamodb()
+
+        # Initialize DynamoDB tables for chat store
+        try:
+            create_chat_store_tables()
+            logger.info("Chat store tables initialized successfully")
+        except Exception as e:
+            logger.error(f"Error initializing chat store tables: {e}")
+            # Don't fail startup if chat tables can't be created
+            # Chat persistence will be disabled but core functionality works
 
         # Initialize index manager
         index_manager = IndexManager(env_vars.PERSIST_PATH, wf, llm)

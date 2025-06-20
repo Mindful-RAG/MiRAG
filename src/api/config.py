@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     DB_HOST: str = os.environ.get("DB_HOST", "")
     AWS_REGION: str = "ap-southeast-1"
     TABLE_NAME: str = os.environ.get("TABLE_NAME", "user-table")
+    CHAT_STORE_TABLE_NAME: str = os.environ.get("CHAT_STORE_TABLE_NAME", "")
     AWS_ACCESS_KEY_ID: str = os.environ.get("AWS_ACCESS_KEY_ID", "")
     AWS_SECRET_ACCESS_KEY: str = os.environ.get("AWS_SECRET_ACCESS_KEY", "")
     PERSIST_PATH: str = os.environ.get("PERSIST_PATH", "./persisted_index")
@@ -50,6 +51,10 @@ class Settings(BaseSettings):
     # Authentication settings
     ACCESS_TOKEN_EXPIRE_HOURS: int = 24
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
+    # Chat settings
+    CHAT_TOKEN_LIMIT: int = 1500
+    MAX_SESSIONS_PER_USER: int = 50
 
 
 settings = Settings()

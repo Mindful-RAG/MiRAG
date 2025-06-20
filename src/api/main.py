@@ -1,20 +1,26 @@
-from fastapi.responses import JSONResponse
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.utils.observability import logger
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from starlette.middleware.sessions import SessionMiddleware
 
 from api.auth import auth
 from api.auth.middleware import AuthMiddleware
 from api.chat import chat
-from api.dependencies import lifespan
 from api.cli import CLI
-
 from api.config import env_vars
+from api.dependencies import lifespan
+from api.utils.observability import logger
 
-
+limiter = Limiter(key_func=get_remote_address, default_limits=["10/minute"])
 app = FastAPI(title="MiRAG API", description="API for Mindful RAG Workflow", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # Add CORS middleware
 app.add_middleware(

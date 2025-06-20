@@ -70,11 +70,11 @@ class LongRAGWorkflow(Workflow):
         ctx.write_event_to_stream(ProgressEvent(progress="Retrieving with LongRAG"))
         retriever = index.as_chat_engine(
             llm=llm,
-            chat_mode=ChatMode.SIMPLE,
+            chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT,
             memory=memory,
             streaming=True,
             system_prompt=(
-                "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index"
+                "You are a chatbot, that does normal interactions, if the conversation is a greeting, respond accordingly, but if its a question, try to access the index. If it asks you to search the web, do so, consider it as a question"
             ),
             verbose=True,
             context=ctx,
@@ -162,7 +162,7 @@ class MiragWorkflow(Workflow):
         """Evaluate relevancy of retrieved documents with the query."""
         retrieved_nodes = ev.retrieved_nodes
         query_str = await ctx.get("query_str")
-        relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.7)
+        relevancy_score_threshold: int = await ctx.get("relevancy_score_threshold", default=0.6)
 
         ctx.write_event_to_stream(ProgressEvent(progress="Checking relevance"))
 
@@ -209,21 +209,26 @@ class MiragWorkflow(Workflow):
         """Search the transformed query with SearXNG."""
         relevant_text = ev.relevant_text
         query_str = await ctx.get("query_str")
+        history = await ctx.get("history")
         relevancy_score = await ctx.get("relevancy_score")
 
         ctx.write_event_to_stream(ProgressEvent(progress="Transforming queries"))
         if relevancy_score < 0.5:
             logger.debug("LongRAG context insufficient - transforming query and using external search")
             llm: LLM = await ctx.get("llm")
+            # previous_chat_history = [[text.text for text in item.blocks] for item in history]
+            previous_chat_history = [item.model_dump() for item in history]
+            breakpoint()
+            merge_query_str = f"{query_str}\n\n{relevant_text}\n\nPrevious chat history:\n{previous_chat_history}"
             transformed_query_str = await llm.acomplete(
-                prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=query_str)
+                prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=merge_query_str)
             )
             logger.debug(f"Transformed query string: {transformed_query_str}")
 
             searxng: SearXNGClient = await ctx.get("searxng")
             searxng_results = await searxng.get_content_for_llm(query=transformed_query_str.text, max_results=10)
 
-            search_text = "\n".join([result.content for result in searxng_results])
+            search_text = "\n".join([f"{result.model_dump()}" for result in searxng_results])
         else:
             logger.debug("LongRAG context fully relevant - no external search needed")
             search_text = ""
