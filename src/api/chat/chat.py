@@ -178,8 +178,8 @@ async def longrag_query(request: Request, query_request: QueryIn, current_user: 
 
 
 @logger.catch
-@router.post("/upload", response_model=UploadResponse)
-async def upload_file(request: Request, current_user: UserDependency, file: UploadFile = File(...)):
+@router.post("/upload")
+async def upload_file(request: Request, current_user: OptionalUserDependency, file: UploadFile = File(...)):
     """Upload a PDF file to the server to be indexed"""
     s3 = request.app.state.s3
     if file.content_type != "application/pdf":
@@ -199,6 +199,7 @@ async def upload_file(request: Request, current_user: UserDependency, file: Uplo
 
     try:
         s3_fs = S3FileSystem(anon=False)
+        logger.info(current_user)
 
         def get_metadata(file_name):
             return {

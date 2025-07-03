@@ -46,7 +46,18 @@ class Settings(BaseSettings):
     DEFAULT_CORPUS: str = "nq_corpus"
 
     # CORS settings
-    ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001"]
+    # ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:3001"]
+
+    @property
+    def ALLOWED_ORIGINS(self) -> list[str]:
+        origins_str = os.environ.get("ALLOWED_ORIGINS", "")
+        if origins_str:
+            # Split by comma and strip whitespace
+            origins = [origin.strip() for origin in origins_str.split(",") if origin.strip()]
+            return origins
+
+        # Default origins for development
+        return ["http://localhost:3000", "http://localhost:3001"]
 
     # Authentication settings
     ACCESS_TOKEN_EXPIRE_HOURS: int = 24

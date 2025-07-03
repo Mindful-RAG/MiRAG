@@ -70,7 +70,7 @@ class LongRAGWorkflow(Workflow):
         ctx.write_event_to_stream(ProgressEvent(progress="Retrieving with LongRAG"))
         retriever = index.as_chat_engine(
             llm=llm,
-            chat_mode=ChatMode.CONDENSE_PLUS_CONTEXT,
+            chat_mode=ChatMode.SIMPLE,
             memory=memory,
             streaming=True,
             system_prompt=(
@@ -218,7 +218,6 @@ class MiragWorkflow(Workflow):
             llm: LLM = await ctx.get("llm")
             # previous_chat_history = [[text.text for text in item.blocks] for item in history]
             previous_chat_history = [item.model_dump() for item in history]
-            breakpoint()
             merge_query_str = f"{query_str}\n\n{relevant_text}\n\nPrevious chat history:\n{previous_chat_history}"
             transformed_query_str = await llm.acomplete(
                 prompt=DEFAULT_TRANSFORM_QUERY_TEMPLATE.format(query_str=merge_query_str)

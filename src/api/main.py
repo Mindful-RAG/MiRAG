@@ -30,6 +30,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+logger.info(f"Allowed origins: {env_vars.ALLOWED_ORIGINS if env_vars.ENVIRONMENT == 'production' else ['*']}")
 
 # Add session middleware
 app.add_middleware(SessionMiddleware, secret_key=env_vars.SECRET_KEY)
@@ -44,6 +45,7 @@ app.include_router(chat.router, prefix="/chat", tags=["chat"])
 
 @app.get("/health")
 @logger.catch
+@limiter.exempt
 async def health_check():
     """Health check endpoint"""
 
